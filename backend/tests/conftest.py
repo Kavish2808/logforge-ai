@@ -76,6 +76,10 @@ def db_session():
         yield session
     finally:
         session.execute(text("DELETE FROM events"))
+        # Phase 5: drift baselines are per-source state that would otherwise
+        # leak between tests (a later test drifting against an earlier one's).
+        session.execute(text("DELETE FROM source_baselines"))
+        session.execute(text("DELETE FROM source_baseline_history"))
         session.commit()
         session.close()
 

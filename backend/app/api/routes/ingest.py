@@ -23,5 +23,6 @@ def ingest_batch(request: BatchIngestRequest, db: Session = Depends(get_db)) -> 
         success_count=outcome.success_count,
         partial_count=outcome.partial_count,
         failed_count=outcome.failed_count,
+        under_review_count=outcome.under_review_count,
         results=outcome.results,
     )

@@ -41,6 +41,8 @@ class BatchIngestResponse(BaseModel):
     success_count: int
     partial_count: int
     failed_count: int
+    # Phase 5: events marked UNDER_REVIEW by drift detection (additive field).
+    under_review_count: int = 0
     results: list[UniversalEvent]
 
 

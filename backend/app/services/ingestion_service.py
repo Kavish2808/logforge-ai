@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.ids import generate_event_id
 from app.db.models.event import Event
 from app.db.repository import event_repo
+from app.services import drift_service
 from app.pipeline.hashing import sha256_hex
 from app.pipeline.orchestrator import PipelineResult
 from app.pipeline.orchestrator import process as run_pipeline
@@ -46,7 +47,7 @@ _VARCHAR_LIMITS: dict[str, int] = {
 
 
 class BatchIngestResult:
-    __slots__ = ("results", "total", "success_count", "partial_count", "failed_count")
+    __slots__ = ("results", "total", "success_count", "partial_count", "failed_count", "under_review_count")
 
     def __init__(self, results: list[UniversalEvent]):
         self.results = results
@@ -54,6 +55,7 @@ class BatchIngestResult:
         self.success_count = sum(1 for r in results if r.status == EventStatus.SUCCESS)
         self.partial_count = sum(1 for r in results if r.status == EventStatus.PARTIAL)
         self.failed_count = sum(1 for r in results if r.status == EventStatus.FAILED)
+        self.under_review_count = sum(1 for r in results if r.status == EventStatus.UNDER_REVIEW)
 
 
 def ingest_raw_log(db: Session, raw_log: str) -> UniversalEvent:
@@ -62,9 +64,11 @@ def ingest_raw_log(db: Session, raw_log: str) -> UniversalEvent:
     event carrying the raw log and its hash, rather than a lost event or
     an unhandled exception propagating to the API layer."""
     try:
+        event_id = generate_event_id()
         result = run_pipeline(raw_log)
         fields = _pipeline_result_fields(result)
-        event = Event(event_id=generate_event_id(), **fields)
+        drift_service.evaluate(db, fields, event_id)  # Phase 5; never raises
+        event = Event(event_id=event_id, **fields)
         saved = event_repo.create_event(db, event)
         return UniversalEvent.model_validate(saved, from_attributes=True)
     except Exception as exc:  # noqa: BLE001
@@ -111,6 +115,9 @@ def reprocess_event(db: Session, event: Event) -> UniversalEvent:
     result = run_pipeline(event.raw_event, received_at=event.received_at)
     fields = _pipeline_result_fields(result)
     fields.pop("received_at", None)  # never overwrite the original receipt time
+    drift_service.evaluate(
+        db, fields, event.event_id, previous_review=drift_service.previous_review(event)
+    )  # Phase 5; never raises
     updated = event_repo.update_event_fields(db, event, fields)
     return UniversalEvent.model_validate(updated, from_attributes=True)
 

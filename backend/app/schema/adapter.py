@@ -55,6 +55,12 @@ class AdapterMapping(BaseModel):
     field_map: dict[str, str | FieldMapEntry] = Field(default_factory=dict)
     static_fields: dict[str, str] = Field(default_factory=dict)
 
+    # Phase 5 drift detection: extra raw (parser-level) field names that are
+    # critical for this vendor, on top of DRIFT_CRITICAL_FIELDS (which are
+    # OCSF targets resolved through field_map). Optional; not used by
+    # normalization.
+    critical_fields: list[str] = Field(default_factory=list)
+
     def resolved_field_map(self) -> dict[str, FieldMapEntry]:
         resolved: dict[str, FieldMapEntry] = {}
         for key, value in self.field_map.items():

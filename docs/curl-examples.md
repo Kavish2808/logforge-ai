@@ -84,7 +84,92 @@ curl -s "http://localhost:8000/api/v1/events/$EVENT_ID" | jq
 curl -s -X POST "http://localhost:8000/api/v1/events/$EVENT_ID/reprocess" | jq
 ```
 
-## 11. Error responses (consistent envelope)
+## 11. Drift detection (Phase 5)
+
+Drift is evaluated only for vendor-specific adapters (`cisco_asa`, `fortinet`,
+`paloalto_cef`). The first event from a source auto-bootstraps its provisional
+baseline; step 5 above already did that for `paloalto_cef`.
+
+Inspect the baseline (`origin: "auto_bootstrap"`):
+
+```bash
+curl -s http://localhost:8000/api/v1/drift/baselines | jq
+curl -s http://localhost:8000/api/v1/drift/baselines/paloalto_cef | jq
+```
+
+Ingest a Palo Alto event whose structure changed (different extension keys).
+It is persisted in full with `status: "UNDER_REVIEW"` and a drift record:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"raw_log": "CEF:0|Palo Alto Networks|PAN-OS|11.0.0|traffic|THREAT|5|rt=1705650300000 src=10.0.0.30 dst=93.184.216.34 spt=51500 dpt=443 proto=tcp act=allow deviceExternalId=0123456789 cs2Label=Zone cs2=trust cn1=42"}' \
+  | jq '{event_id, status, drift: .processing_metadata.drift}'
+```
+
+Read the deterministic drift report (change types, severity, critical fields,
+recommendations) and its human-readable explanation:
+
+```bash
+curl -s "http://localhost:8000/api/v1/events/$DRIFT_EVENT_ID" \
+  | jq '.processing_metadata.drift | {status, severity, change_types, critical_field_changes, recommended_actions}'
+curl -s "http://localhost:8000/api/v1/events/$DRIFT_EVENT_ID" | jq -r '.processing_metadata.drift.explanation'
+```
+
+Remove a critical field (the source IP, `src`) from the step-5 structure —
+similarity stays high, but the event is still sent to review as a
+critical-field change:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"raw_log": "CEF:0|Palo Alto Networks|PAN-OS|10.2.0|traffic|THREAT|5|dst=93.184.216.34 spt=51500 dpt=443 proto=tcp act=allow suser=jdoe"}' \
+  | jq '.processing_metadata.drift | {status, similarity, decision_reasons, critical_field_changes, severity}'
+```
+
+Possible format drift — a FortiGate log whose tag changed case no longer
+matches the `fortinet` adapter and falls back to `syslog_generic`; once
+`fortinet` is a known source (ingest step 4 first), it is flagged:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"raw_log": "<189>Jan 18 12:00:00 FGT100E FortiGate: date=2026-01-18 time=12:00:00 devname=\"FGT100E\" srcip=10.0.0.15 srcport=51422 dstip=8.8.8.8 dstport=53 proto=17 action=\"accept\" msg=\"DNS query\""}' \
+  | jq '{adapter_id, status, drift: (.processing_metadata.drift | {status, source_key, current_adapter, evidence, severity})}'
+```
+
+List the review queue:
+
+```bash
+curl -s "http://localhost:8000/api/v1/events?status=UNDER_REVIEW" | jq '.items[] | {event_id, adapter_id, drift: .processing_metadata.drift.status, severity: .processing_metadata.drift.severity}'
+```
+
+Human review — accept the new structure as an additional variant, or make it
+the new baseline (`"mode": "replace_baseline"`):
+
+```bash
+DRIFT_EVENT_ID="<event_id of the UNDER_REVIEW event>"
+curl -s -X POST "http://localhost:8000/api/v1/events/$DRIFT_EVENT_ID/drift/accept" \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "add_variant", "note": "PAN-OS 11 upgrade, adapter reviewed"}' | jq
+```
+
+For a `POSSIBLE_FORMAT_DRIFT` event (or a drift you want to close without
+changing the baseline) use `{"mode": "acknowledge"}`.
+
+See how the source's structure evolved (v1 created → v2 variant → v3 replaced):
+
+```bash
+curl -s http://localhost:8000/api/v1/drift/baselines/paloalto_cef | jq '.history[] | {version, action, event_id, changes}'
+```
+
+Accepting an event that is not under drift review returns `409`:
+
+```bash
+# {"error": {"code": "CONFLICT", "message": "Event '...' is not UNDER_REVIEW due to structural drift."}}
+```
+
+## 12. Error responses (consistent envelope)
 
 A non-existent event:
 
