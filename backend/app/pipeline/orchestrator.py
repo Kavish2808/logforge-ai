@@ -3,6 +3,9 @@
 raw log -> detect format -> parse -> select adapter -> normalize (OCSF)
 -> preserve unknown fields as extensions -> structural fingerprint
 
+Logs the built-in detector cannot classify are offered to human-approved
+declarative (onboarded) adapters before being marked FAILED.
+
 This module makes no network calls and has no external dependency: it
 operates purely on in-process registries (parsers, adapters) that are
 loaded from local files at process startup.
@@ -18,7 +21,7 @@ from app.pipeline.detector.format_detector import detect_format
 from app.pipeline.fingerprint.structural import compute_fingerprint
 from app.pipeline.hashing import sha256_hex
 from app.pipeline.normalizer.ocsf_mapper import normalize
-from app.pipeline.parsers.base import ParserError
+from app.pipeline.parsers.base import ParserError, ParseResult
 from app.pipeline.parsers.registry import get_parser
 from app.schema.ocsf import EventStatus, FormatType
 
@@ -70,7 +73,12 @@ def process(
 
     format_detected = detect_format(raw_log)
 
-    if format_detected == FormatType.UNKNOWN:
+    # Onboarded sources: a log the built-in detector cannot classify may
+    # still match a human-approved declarative adapter. With no such adapter
+    # registered this is always None and behavior is exactly as before.
+    declarative = registry.find_declarative(raw_log) if format_detected == FormatType.UNKNOWN else None
+
+    if format_detected == FormatType.UNKNOWN and declarative is None:
         return PipelineResult(
             raw_event=raw_log,
             raw_hash=raw_hash,
@@ -82,38 +90,45 @@ def process(
             error_message="Could not detect a known log format (syslog/json/cef).",
         )
 
-    parser = get_parser(format_detected.value)
-    if parser is None:
-        # Defensive: every FormatType other than UNKNOWN has a registered parser.
-        return PipelineResult(
-            raw_event=raw_log,
-            raw_hash=raw_hash,
-            format_detected=format_detected.value,
-            status=EventStatus.FAILED.value,
-            received_at=received_at,
-            processed_at=datetime.now(tz=timezone.utc),
-            processing_metadata={"pipeline_version": PIPELINE_VERSION, "parser": None},
-            error_message=f"No parser registered for format '{format_detected.value}'.",
-        )
+    if declarative is not None:
+        declarative_adapter, parser, declarative_fields = declarative
+        format_name = declarative_adapter.format
+        parse_result = ParseResult(fields=declarative_fields, format_detected=format_name)
+    else:
+        declarative_adapter = None
+        format_name = format_detected.value
+        parser = get_parser(format_name)
+        if parser is None:
+            # Defensive: every FormatType other than UNKNOWN has a registered parser.
+            return PipelineResult(
+                raw_event=raw_log,
+                raw_hash=raw_hash,
+                format_detected=format_name,
+                status=EventStatus.FAILED.value,
+                received_at=received_at,
+                processed_at=datetime.now(tz=timezone.utc),
+                processing_metadata={"pipeline_version": PIPELINE_VERSION, "parser": None},
+                error_message=f"No parser registered for format '{format_name}'.",
+            )
 
-    try:
-        parse_result = parser.parse(raw_log)
-    except ParserError as exc:
-        return PipelineResult(
-            raw_event=raw_log,
-            raw_hash=raw_hash,
-            format_detected=format_detected.value,
-            status=EventStatus.FAILED.value,
-            received_at=received_at,
-            processed_at=datetime.now(tz=timezone.utc),
-            processing_metadata={"pipeline_version": PIPELINE_VERSION, "parser": parser.format_name},
-            error_message=str(exc),
-        )
+        try:
+            parse_result = parser.parse(raw_log)
+        except ParserError as exc:
+            return PipelineResult(
+                raw_event=raw_log,
+                raw_hash=raw_hash,
+                format_detected=format_name,
+                status=EventStatus.FAILED.value,
+                received_at=received_at,
+                processed_at=datetime.now(tz=timezone.utc),
+                processing_metadata={"pipeline_version": PIPELINE_VERSION, "parser": parser.format_name},
+                error_message=str(exc),
+            )
 
     fingerprint = compute_fingerprint(parse_result.fields)
     warnings = list(parse_result.warnings)
 
-    adapter = registry.find_for(format_detected.value, parse_result.fields)
+    adapter = declarative_adapter or registry.find_for(format_name, parse_result.fields)
     if adapter is None:
         # No generic fallback is registered for this format (shouldn't happen
         # in practice — every shipped format has one) -> preserve everything
@@ -121,7 +136,7 @@ def process(
         return PipelineResult(
             raw_event=raw_log,
             raw_hash=raw_hash,
-            format_detected=format_detected.value,
+            format_detected=format_name,
             status=EventStatus.PARTIAL.value,
             received_at=received_at,
             processed_at=datetime.now(tz=timezone.utc),
@@ -143,7 +158,7 @@ def process(
     return PipelineResult(
         raw_event=raw_log,
         raw_hash=raw_hash,
-        format_detected=format_detected.value,
+        format_detected=format_name,
         status=status,
         received_at=received_at,
         processed_at=datetime.now(tz=timezone.utc),
@@ -169,7 +184,7 @@ def process(
             "pipeline_version": PIPELINE_VERSION,
             "parser": parser.format_name,
             "adapter_id": adapter.id,
-            "adapter_source": "manual",
+            "adapter_source": adapter.source,
         },
         structural_fingerprint=fingerprint,
         warnings=warnings,

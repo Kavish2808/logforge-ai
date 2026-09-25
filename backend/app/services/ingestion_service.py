@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.ids import generate_event_id
 from app.db.models.event import Event
 from app.db.repository import event_repo
-from app.services import drift_service
+from app.services import drift_service, onboarding_service
 from app.pipeline.hashing import sha256_hex
 from app.pipeline.orchestrator import PipelineResult
 from app.pipeline.orchestrator import process as run_pipeline
@@ -65,9 +65,11 @@ def ingest_raw_log(db: Session, raw_log: str) -> UniversalEvent:
     an unhandled exception propagating to the API layer."""
     try:
         event_id = generate_event_id()
-        result = run_pipeline(raw_log)
+        # Shipped YAML adapters + human-approved onboarded adapters; never an LLM.
+        registry = onboarding_service.runtime_registry(db)
+        result = run_pipeline(raw_log, adapter_registry=registry)
         fields = _pipeline_result_fields(result)
-        drift_service.evaluate(db, fields, event_id)  # Phase 5; never raises
+        drift_service.evaluate(db, fields, event_id, adapter_registry=registry)  # Phase 5; never raises
         event = Event(event_id=event_id, **fields)
         saved = event_repo.create_event(db, event)
         return UniversalEvent.model_validate(saved, from_attributes=True)
@@ -112,11 +114,12 @@ def list_events(
 
 
 def reprocess_event(db: Session, event: Event) -> UniversalEvent:
-    result = run_pipeline(event.raw_event, received_at=event.received_at)
+    registry = onboarding_service.runtime_registry(db)
+    result = run_pipeline(event.raw_event, received_at=event.received_at, adapter_registry=registry)
     fields = _pipeline_result_fields(result)
     fields.pop("received_at", None)  # never overwrite the original receipt time
     drift_service.evaluate(
-        db, fields, event.event_id, previous_review=drift_service.previous_review(event)
+        db, fields, event.event_id, previous_review=drift_service.previous_review(event), adapter_registry=registry
     )  # Phase 5; never raises
     updated = event_repo.update_event_fields(db, event, fields)
     return UniversalEvent.model_validate(updated, from_attributes=True)

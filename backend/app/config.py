@@ -17,8 +17,20 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://logforge:logforge@localhost:5432/logforge"
 
+    # LLM — used ONLY to suggest adapters during onboarding, never at runtime.
+    # "anthropic" uses Claude when ANTHROPIC_API_KEY is set, otherwise the
+    # deterministic offline analyzer; "offline" never calls a network API.
     llm_provider: str = "anthropic"
     anthropic_api_key: str = ""
+    onboarding_llm_model: str = "claude-opus-5"
+    onboarding_llm_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
+
+    # Onboarding sandbox thresholds. Passing them only makes a proposal
+    # *eligible* for human approval; it never activates anything.
+    onboarding_min_match_rate: float = Field(default=0.90, ge=0.0, le=1.0)
+    onboarding_reject_below_match_rate: float = Field(default=0.50, ge=0.0, le=1.0)
+    onboarding_min_mapping_coverage: float = Field(default=0.30, ge=0.0, le=1.0)
+    onboarding_recommended_samples: int = Field(default=10, ge=1, le=50)
 
     # Phase 5 drift detection. DRIFT_ENABLED=false restores Phase 0-4
     # ingestion behavior exactly (no drift evaluation, no baselines).

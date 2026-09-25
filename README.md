@@ -1,15 +1,20 @@
 # LogForge AI
 
-**Universal Adaptive Log Pre-processing Framework — MVP (Phases 0–4 hardened + Phase 5 drift detection)**
+**Universal Adaptive Log Pre-processing Framework — MVP (Phases 0–4 hardened, Phase 3 adaptive onboarding, Phase 5 drift detection)**
 
 LogForge AI takes raw security/application logs in whatever format they arrive
 in, and turns them into a consistent, OCSF-aligned structured event —
 without ever losing the original data, even when parsing fails.
 
 ```
-Any Log → Detect → Parse → Normalize → Preserve → Detect Drift → (Learn*) → (Analyze*)
+Any Log → Detect → Parse → Normalize → Preserve → Detect Drift → (Analyze*)
+Unknown source → Learn from samples → Validate → Human approval → Versioned adapter → auto-parsed
 ```
-<sub>*Learn (LLM-assisted onboarding) and Analyze (dashboard analytics) are later phases — see "Not yet implemented" below.</sub>
+<sub>*Analyze (dashboard analytics) is a later phase — see "Not yet implemented" below.</sub>
+
+> **Phases.** Phase 3 — *adaptive onboarding*: "I have never seen this source — learn it."
+> Phase 5 — *drift detection*: "I know this source — something about it changed."
+> Phase 6 (future) — "this approved change has become part of what I know."
 
 ## What it does today
 
@@ -54,6 +59,9 @@ backend/app/
     hashing.py        SHA-256 of the raw payload
     orchestrator.py   wires the above into one deterministic pipeline
   adapters/        YAML vendor mappings + loader/registry (validated, no code)
+  onboarding/      Phase 3: sample analysis, suggestion providers (Claude /
+                    offline), proposal schema + evidence review, sandbox,
+                    explanation — used during onboarding only, never at runtime
   schema/          Pydantic models: OCSF universal event, adapter mapping,
                     API request/response, error envelope
   db/              SQLAlchemy models + repository layer (no ORM logic leaks
@@ -118,6 +126,13 @@ overwritten.
 | GET | `/api/v1/drift/baselines` | List per-source structural baselines (origin, version, accepted variants, under-review count) |
 | GET | `/api/v1/drift/baselines/{source_key}` | Fetch one baseline (`source_key` = vendor `adapter_id`) |
 | POST | `/api/v1/events/{event_id}/drift/accept` | Human review of a drifted event (`add_variant`, `replace_baseline` or `acknowledge`) |
+| POST | `/api/v1/onboarding/sessions` | Start onboarding an unknown source from raw `samples` and/or existing `event_ids` |
+| GET | `/api/v1/onboarding/sessions` · `/sessions/{id}` | List sessions · full session (samples, evidence, proposal, validation, activation, explanation) |
+| POST | `/api/v1/onboarding/sessions/{id}/suggest` | Ask the suggestion engine (`auto` / `anthropic` / `offline`) for a proposal; it is validated immediately |
+| PUT | `/api/v1/onboarding/sessions/{id}/proposal` | Submit a human-written/edited proposal (same validation) |
+| POST | `/api/v1/onboarding/sessions/{id}/approve` · `/reject` | Human decision; only a PASSED proposal version can be approved |
+| GET | `/api/v1/onboarding/adapters` · `/adapters/{adapter_id}` | Versioned onboarded adapters |
+| POST | `/api/v1/onboarding/adapters/{adapter_id}/rollback` | Withdraw the active version; the previous version becomes active again |
 
 `GET /drift/baselines/{source_key}` and the accept response include the
 source's structural `history`; every event's full drift record (including
@@ -160,7 +175,90 @@ design (not in the PRD's MVP scope). Key variables:
 | `DRIFT_ENABLED` | `true` (default) enables drift detection; `false` restores Phase 0-4 ingestion behavior exactly |
 | `DRIFT_SIMILARITY_THRESHOLD` | `0.0`–`1.0` (default `0.85`); vendor events scoring below it vs. their baseline become `UNDER_REVIEW` |
 | `DRIFT_CRITICAL_FIELDS` | Comma-separated OCSF targets (default `event_action,severity,network.src_ip,network.dst_ip,network.src_port,network.dst_port`) whose removal or type change always forces review |
-| `LLM_PROVIDER`, `ANTHROPIC_API_KEY` | Reserved for Phase 6, unused by any code path today |
+| `LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `ONBOARDING_LLM_MODEL` | Onboarding suggestions only: Claude (`claude-opus-5`) when a key is set, else the offline analyzer. Never used by the runtime pipeline |
+| `ONBOARDING_MIN_MATCH_RATE`, `ONBOARDING_REJECT_BELOW_MATCH_RATE`, `ONBOARDING_MIN_MAPPING_COVERAGE` | Sandbox thresholds (defaults 0.90 / 0.50 / 0.30) |
+
+## Adaptive unknown-vendor onboarding (Phase 3)
+
+> LogForge can learn a completely new log source from a small sample,
+> validate the proposed parser safely, require human approval, version the
+> approved mapping, and automatically process future logs.
+
+```
+UNKNOWN SOURCE → samples (10–15 recommended) → deterministic multi-sample analysis
+→ AI suggestion (untrusted) → strict schema + evidence review → sandbox on EVERY sample
+→ PASSED / NEEDS_REVIEW / REJECTED → HUMAN APPROVAL → versioned adapter (ACTIVE)
+→ future logs parsed by the normal pipeline — no LLM at runtime
+```
+
+**AI is used for onboarding; deterministic, approved configuration is used at runtime.**
+
+1. **Samples.** `POST /onboarding/sessions` with raw `samples` and/or `event_ids`
+   of existing events (e.g. the `FAILED` events an unknown source produced).
+   Up to 50 samples of ≤ 16 KB; fewer than 10 is accepted with a warning.
+   Samples are stored with their SHA-256 and are never modified or dropped,
+   whatever fails later.
+2. **Multi-sample analysis** (deterministic, `app/onboarding/analysis.py`):
+   format per sample (syslog/JSON/CEF via the existing detector and parsers;
+   otherwise key=value or delimited structure), every field's presence count,
+   value classes (IPv4/IPv6, integer + range, timestamp, epoch, severity word,
+   string, …), type consistency, constant values (identity candidates),
+   optional fields, structural variants and common prefix. Only observed
+   fields are reported.
+3. **Suggestion.** Claude (`claude-opus-5`, JSON-schema structured output,
+   server-side refusal fallback) when `ANTHROPIC_API_KEY` is set, or the
+   deterministic offline analyzer. The samples are sent to the model as
+   untrusted data; its output is never executed.
+4. **Proposal = declarative data only** (`app/onboarding/proposal.py`): vendor,
+   product, format, parser strategy (`native` for syslog/JSON/CEF, or the
+   configuration-only `kv` / `delimited` parsers — no regex, no code), an
+   identity match rule, and `raw_field → target` mappings with per-mapping
+   confidence and evidence. The schema forbids unknown keys; targets must be
+   in the universal-schema allow-list (`network.*`, `user.*`, `process.*`,
+   `event_action`, `severity`, `timestamp`, …); raw fields must occur in the
+   samples. Invalid mappings are rejected individually and their fields stay
+   in `extensions`.
+5. **Sandbox validation** (`app/onboarding/sandbox.py`) runs every sample
+   through the *real* runtime pipeline with the candidate adapter and reports
+   match rate, parsed/failed samples, mapping coverage, unmapped (extension)
+   fields, normalization warnings, per-mapping presence ("rule present in 4/12")
+   and structural consistency (Phase 5 comparator). Result:
+   - `PASSED` — match rate ≥ `ONBOARDING_MIN_MATCH_RATE` (0.90), coverage ≥
+     minimum, no rejected mappings, no warnings → *eligible* for approval;
+   - `NEEDS_REVIEW` — valid but below a threshold → revise (re-suggest or
+     `PUT /proposal`);
+   - `REJECTED` — invalid proposal (never executed), match rate below the
+     floor, or samples already owned by an existing adapter (a known source is
+     a Phase 5 drift matter, not onboarding).
+
+   PASSED means the proposal met the configured thresholds on these samples —
+   not that it is correct for every future log.
+6. **Human approval (mandatory).** A suggestion is never active; a PASSED
+   validation is still not active (`activation.state:
+   NOT_ACTIVE_AWAITING_APPROVAL`). Only `POST .../approve` with the exact
+   `proposal_version` activates it, after re-running the sandbox. The record
+   keeps who (`approved_by`, free text — there is no authentication), when,
+   the proposal version, the validation result/match rate and the mapping.
+   `reject` activates nothing and keeps the samples; a rejected session can
+   receive a new proposal.
+7. **Versioned adapters.** Approval creates an immutable row in
+   `onboarded_adapters` (`adapter_id` = `vendor_product`, version 1, 2, …). A
+   new version supersedes the previous one (kept, never overwritten);
+   identical versions are refused; shipped adapter ids can't be claimed; the
+   database enforces one ACTIVE version per adapter. `rollback` withdraws the
+   active version and reactivates the previous one.
+8. **Future auto-parsing.** The ingestion service builds its registry from
+   shipped YAML + ACTIVE onboarded adapters. Known formats select the
+   onboarded adapter by its match rule; logs the detector can't classify are
+   offered to approved `kv`/`delimited` adapters before being marked `FAILED`.
+   Events carry `processing_metadata.adapter_source: "onboarded"`, preserve
+   raw + hash + unmapped fields, and — as known sources — get Phase 5 drift
+   detection. Existing `FAILED` events can be fixed with `/reprocess`.
+
+Every session response includes an evidence-based `explanation` (format and
+share of samples, why the vendor was suggested, each mapping with its
+presence count, uncertain fields, sandbox result, why it passed/failed, and
+exactly what becomes active on approval).
 
 ## Drift detection (Phase 5)
 
@@ -452,11 +550,15 @@ docker compose run --rm backend pytest -v
 
 Tests are organized as:
 - `tests/unit/` — parsers, detector, normalizer, adapters, hashing, IDs,
-  fingerprinting, the drift comparator, all with zero DB/network dependency.
+  fingerprinting, the drift comparator, onboarding analysis / proposal
+  schema / sandbox / providers (Claude via a mocked HTTP transport), all with
+  zero DB/network dependency.
 - `tests/integration/` — full FastAPI app against a real Postgres instance:
   ingestion, persistence, reprocessing, batch isolation, failure
   preservation, error envelopes, request-size limits, drift detection and
-  human review.
+  human review, and the end-to-end onboarding flow (suggest → sandbox →
+  approve/reject → versioned adapter → future auto-parsing → rollback,
+  including malformed/unavailable LLM and code-injection attempts).
 
 Integration tests run against a dedicated `<db name>_test` database
 (created automatically on first run), never the database a running
@@ -497,6 +599,20 @@ do alongside a live demo without touching its data.
   inside another field cannot be tracked individually.
 - **Severity weights and bands are MVP heuristics** (named constants), not
   tuned against production data; the threshold is the only runtime knob.
+- **Onboarding: declarative parsers cover key=value and delimited
+  single-line records**, plus the native syslog/JSON/CEF parsers. Formats
+  that need free-text extraction (regex) or multi-line records can't be
+  onboarded — by design, no regex or code is ever generated.
+- **Onboarding: a source needs a constant identity field** (e.g. a vendor or
+  device name present in every sample) so future logs can be recognized
+  safely; the offline analyzer refuses otherwise. JSON keys must be simple
+  identifiers to be mappable.
+- **Onboarding: approvals are unauthenticated** — `approved_by` is free text
+  (there is no user system in this MVP).
+- **Onboarding: live Anthropic inference was not executed because no API key
+  was available.** The provider integration is covered by mocked HTTP, schema
+  validation, fallback, refusal/error handling, and regression tests. No live
+  Claude result is claimed. Without a key, the offline analyzer is used.
 - **Reprocessing re-evaluates drift from scratch** (the prior human review is
   carried forward): an *acknowledged* drift whose structure was never
   accepted into the baseline returns to `UNDER_REVIEW` on reprocess.
@@ -508,10 +624,8 @@ do alongside a live demo without touching its data.
 
 ## Not yet implemented (by design — future phases)
 
-- **Phase 6** — LLM-assisted unknown-vendor onboarding (sample collection,
-  pattern generation, sandbox testing, human-approval workflow). The
-  `llm/` provider interface is intentionally not built yet; `LLM_PROVIDER`/
-  `ANTHROPIC_API_KEY` config exists but is unused.
+- **Phase 6** — "this approved change has become part of what I know":
+  feeding approved drift/onboarding outcomes back into the known-source model.
 - Dashboard UI with processing metrics.
 - Kafka, OpenSearch, MinIO, dead-letter queue, horizontal workers — all
   explicitly deferred per the PRD.

@@ -169,7 +169,54 @@ Accepting an event that is not under drift review returns `409`:
 # {"error": {"code": "CONFLICT", "message": "Event '...' is not UNDER_REVIEW due to structural drift."}}
 ```
 
-## 12. Error responses (consistent envelope)
+## 12. Onboarding an unknown source (Phase 3)
+
+An unknown key=value source is `FAILED` today (raw preserved):
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/ingest -H "Content-Type: application/json" \
+  -d '{"raw_log": "vendor=ACMEFW ts=2026-01-18T12:00:00Z srcip=10.0.0.1 dstip=8.8.8.8 srcport=40000 dstport=443 action=allow sev=high"}' \
+  | jq '{status, format_detected}'
+```
+
+Start a session with samples (10–15 recommended; `event_ids` of FAILED
+events work too):
+
+```bash
+SAMPLES=$(for i in $(seq 1 12); do printf '"vendor=ACMEFW ts=2026-01-18T12:%02d:00Z srcip=10.0.0.%d dstip=8.8.8.8 srcport=%d dstport=443 action=allow sev=high",' $i $i $((40000+i)); done)
+SESSION=$(curl -s -X POST http://localhost:8000/api/v1/onboarding/sessions -H "Content-Type: application/json" \
+  -d "{\"samples\": [${SAMPLES%,}]}" | jq -r .id)
+```
+
+Get a suggestion (Claude if `ANTHROPIC_API_KEY` is set, else the offline
+analyzer) — it is validated in the sandbox immediately, but NOT activated:
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/onboarding/sessions/$SESSION/suggest" \
+  -H "Content-Type: application/json" -d '{"provider": "auto"}' \
+  | jq '{status, result: .validation.result, metrics: (.validation.metrics | {matched_samples, total_samples, match_rate, mapping_coverage}), activation}'
+curl -s "http://localhost:8000/api/v1/onboarding/sessions/$SESSION" | jq -r .explanation
+```
+
+Approve the exact proposal version (human decision), then future logs are
+parsed by the approved adapter without any LLM call:
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/onboarding/sessions/$SESSION/approve" \
+  -H "Content-Type: application/json" -d '{"proposal_version": 1, "approved_by": "analyst", "note": "reviewed"}' \
+  | jq '.adapter | {adapter_id, version, status}'
+
+curl -s -X POST http://localhost:8000/api/v1/ingest -H "Content-Type: application/json" \
+  -d '{"raw_log": "vendor=ACMEFW ts=2026-01-19T08:00:00Z srcip=10.9.9.9 dstip=1.1.1.1 srcport=50000 dstport=53 action=deny sev=high"}' \
+  | jq '{status, adapter_id, adapter_version, source: .processing_metadata.adapter_source, network}'
+```
+
+Or reject (`POST .../reject {"reason": "..."}`), edit the proposal
+(`PUT .../proposal {"proposal": {...}}`), inspect versions
+(`GET /api/v1/onboarding/adapters/acmefw_acmefw`) and roll back
+(`POST /api/v1/onboarding/adapters/acmefw_acmefw/rollback`).
+
+## 13. Error responses (consistent envelope)
 
 A non-existent event:
 

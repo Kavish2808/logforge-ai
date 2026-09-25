@@ -11,6 +11,8 @@ from pathlib import Path
 
 import yaml
 
+from app.pipeline.parsers.base import ParserError
+from app.pipeline.parsers.declarative import DeclarativeParser
 from app.schema.adapter import AdapterMapping, MatchRule
 
 _MAPPINGS_DIR = Path(__file__).parent / "mappings"
@@ -47,6 +49,24 @@ class AdapterRegistry:
             if _match_rule_applies(adapter.match, parsed_fields):
                 return adapter
         return fallback
+
+    def find_declarative(self, raw_log: str) -> tuple[AdapterMapping, DeclarativeParser, dict] | None:
+        """For logs the built-in detector cannot classify: the first adapter
+        with a declarative parser that both parses the log and whose match
+        rule applies to the parsed fields. Adapters are tried in registry
+        order (shipped YAML first, then onboarded adapters by approval
+        order). Returns (adapter, parser, parsed_fields) or None."""
+        for adapter in self._adapters:
+            if adapter.parser is None or adapter.match is None:
+                continue
+            parser = DeclarativeParser(adapter.parser)
+            try:
+                fields = parser.parse(raw_log).fields
+            except ParserError:
+                continue
+            if _match_rule_applies(adapter.match, fields):
+                return adapter, parser, fields
+        return None
 
 
 def _match_rule_applies(rule: MatchRule, parsed_fields: dict) -> bool:

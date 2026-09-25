@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import drift, events, health, ingest
+from app.api.routes import drift, events, health, ingest, onboarding
 from app.config import get_settings
 from app.core.logging import configure_logging
 from app.schema.errors import ErrorDetail, ErrorResponse
@@ -50,6 +50,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
         status.HTTP_405_METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
         status.HTTP_409_CONFLICT: "CONFLICT",
+        status.HTTP_422_UNPROCESSABLE_ENTITY: "UNPROCESSABLE",
+        status.HTTP_502_BAD_GATEWAY: "UPSTREAM_ERROR",
     }.get(exc.status_code, "HTTP_ERROR")
     body = ErrorResponse(error=ErrorDetail(code=code, message=str(exc.detail)))
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
@@ -70,6 +72,7 @@ app.include_router(health.router)
 app.include_router(ingest.router, prefix=settings.api_v1_prefix)
 app.include_router(events.router, prefix=settings.api_v1_prefix)
 app.include_router(drift.router, prefix=settings.api_v1_prefix)
+app.include_router(onboarding.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

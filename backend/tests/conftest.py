@@ -80,6 +80,8 @@ def db_session():
         # leak between tests (a later test drifting against an earlier one's).
         session.execute(text("DELETE FROM source_baselines"))
         session.execute(text("DELETE FROM source_baseline_history"))
+        session.execute(text("DELETE FROM onboarded_adapters"))
+        session.execute(text("DELETE FROM onboarding_sessions"))
         session.commit()
         session.close()
 

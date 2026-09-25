@@ -36,7 +36,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.adapters.loader import get_adapter_registry
+from app.adapters.loader import AdapterRegistry, get_adapter_registry
 from app.config import get_settings
 from app.db.models.event import Event
 from app.db.models.source_baseline import (
@@ -85,6 +85,7 @@ def evaluate(
     event_id: str,
     *,
     previous_review: dict[str, Any] | None = None,
+    adapter_registry: AdapterRegistry | None = None,
 ) -> None:
     """Evaluate drift for an event about to be persisted, mutating its
     persistence field dict in place (status, processing_metadata.drift).
@@ -92,7 +93,10 @@ def evaluate(
     settings = get_settings()
     if not settings.drift_enabled:
         return
-    adapter = _evaluable_adapter(fields)
+    # The registry the pipeline used (shipped + human-approved onboarded
+    # adapters), so onboarded sources are known sources for drift detection.
+    registry = adapter_registry or get_adapter_registry()
+    adapter = _evaluable_adapter(fields, registry)
     if adapter is None:
         return
 
@@ -105,7 +109,7 @@ def evaluate(
             if adapter.match is not None:
                 outcome = _evaluate_known_source(db, fields, event_id, adapter, threshold)
             else:
-                outcome = _evaluate_adapter_fallback(db, fields, event_id, threshold)
+                outcome = _evaluate_adapter_fallback(db, fields, event_id, threshold, registry)
     except Exception as exc:  # noqa: BLE001
         logger.exception(
             "Drift evaluation failed for adapter '%s'; event persisted without drift decision.", adapter.id
@@ -139,13 +143,13 @@ def evaluate(
     fields["processing_metadata"] = {**(fields.get("processing_metadata") or {}), "drift": record}
 
 
-def _evaluable_adapter(fields: dict[str, Any]) -> AdapterMapping | None:
+def _evaluable_adapter(fields: dict[str, Any], registry: AdapterRegistry) -> AdapterMapping | None:
     if fields.get("status") == EventStatus.FAILED.value:
         return None
     adapter_id = fields.get("adapter_id")
     if not adapter_id or not fields.get("structural_fingerprint"):
         return None
-    return get_adapter_registry().get(adapter_id)
+    return registry.get(adapter_id)
 
 
 def _evaluate_known_source(
@@ -249,12 +253,11 @@ def _evaluate_known_source(
 
 
 def _evaluate_adapter_fallback(
-    db: Session, fields: dict[str, Any], event_id: str, threshold: float
+    db: Session, fields: dict[str, Any], event_id: str, threshold: float, registry: AdapterRegistry
 ) -> tuple[dict[str, Any], bool] | None:
     """A generic-adapter event: look for deterministic evidence that it comes
     from a previously known vendor source (one with a baseline) whose
     adapter no longer matched. No evidence -> no drift record at all."""
-    registry = get_adapter_registry()
     parsed_fields: dict[str, Any] | None = None
     best: tuple[SourceBaseline, AdapterMapping, list[dict[str, str]]] | None = None
     for baseline in baseline_repo.list_baselines(db):

@@ -28,6 +28,10 @@ class FormatType(StrEnum):
     SYSLOG = "syslog"
     JSON = "json"
     CEF = "cef"
+    # Formats of onboarded sources, parsed by human-approved declarative
+    # parsers; never returned by the built-in detector.
+    DELIMITED = "delimited"
+    KV = "kv"
     UNKNOWN = "unknown"
 
 
@@ -138,7 +142,7 @@ class ProcessingMetadata(BaseModel):
     parser: str | None = None
     pipeline_version: str = "0.1.0"
     duration_ms: float | None = None
-    adapter_source: str | None = None  # "manual" | "llm_generated"
+    adapter_source: str | None = None  # "manual" (shipped YAML) | "onboarded" (human-approved onboarding)
     drift: DriftMetadata | None = None
 
 
