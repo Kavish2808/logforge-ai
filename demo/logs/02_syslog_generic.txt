@@ -1,0 +1,1 @@
+<38>Jan 18 12:01:00 webhost01 sshd[4210]: Accepted password for alice from 192.168.1.50 port 22 ssh2

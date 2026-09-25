@@ -1,0 +1,40 @@
+# Cisco ASA firewall syslog messages, e.g.:
+#   <166>Jan 18 12:05:00 ciscoasa %ASA-6-302013: Built outbound TCP connection ...
+id: cisco_asa
+vendor: Cisco
+product: ASA
+format: syslog
+version: "1"
+description: "Cisco ASA firewall syslog messages (%ASA-<level>-<msg_id>: ...)."
+
+match:
+  format: syslog
+  field: app_name
+  contains: "%ASA-"
+
+ocsf:
+  class_uid: 4001
+  class_name: "Network Activity"
+  category_uid: 4
+  category_name: "Network Activity"
+
+event_type: "Firewall"
+event_action_field: message
+
+severity_field: severity
+severity_map:
+  "0": Emergency
+  "1": Alert
+  "2": Critical
+  "3": Error
+  "4": Warning
+  "5": Notice
+  "6": Informational
+  "7": Debug
+
+timestamp_field: timestamp
+
+field_map:
+  hostname: { target: "device_hostname" }
+  app_name: { target: "cisco_message_id" }
+  message: { target: "event_message" }

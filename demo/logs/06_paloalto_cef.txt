@@ -1,0 +1,1 @@
+<134>Jan 18 12:10:00 PA-VM CEF:0|Palo Alto Networks|PAN-OS|10.2.0|traffic|THREAT|5|src=10.0.0.30 dst=93.184.216.34 spt=51500 dpt=443 proto=tcp act=allow suser=jdoe cs1Label=URL cs1=example.com

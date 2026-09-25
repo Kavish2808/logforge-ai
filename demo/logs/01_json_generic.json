@@ -1,0 +1,1 @@
+{"timestamp": "2026-01-18T12:00:00Z", "message": "User login successful", "severity": "info", "user": "jdoe", "src_ip": "10.0.0.5", "src_port": 51234, "custom_app_field": "checkout-service-v3"}

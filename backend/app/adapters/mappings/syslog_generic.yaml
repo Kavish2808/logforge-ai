@@ -1,0 +1,35 @@
+# Fallback mapping used when a syslog event doesn't match any
+# vendor-specific adapter (see mappings/vendors/).
+id: syslog_generic
+vendor: Generic
+product: Syslog
+format: syslog
+version: "1"
+description: "Fallback mapping for unrecognized syslog sources (RFC3164/RFC5424)."
+
+ocsf:
+  class_uid: 1001
+  class_name: "System Activity"
+  category_uid: 1
+  category_name: "System Activity"
+
+event_action_field: message
+
+severity_field: severity
+severity_map:
+  "0": Emergency
+  "1": Alert
+  "2": Critical
+  "3": Error
+  "4": Warning
+  "5": Notice
+  "6": Informational
+  "7": Debug
+
+timestamp_field: timestamp
+
+field_map:
+  hostname: { target: "device_hostname" }
+  app_name: { target: "process.name" }
+  proc_id: { target: "process.pid" }
+  message: { target: "event_message" }

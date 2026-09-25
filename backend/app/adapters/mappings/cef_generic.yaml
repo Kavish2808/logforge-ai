@@ -1,0 +1,49 @@
+# Fallback mapping for CEF logs that don't match any vendor-specific
+# adapter (e.g. mappings/vendors/paloalto.yaml).
+id: cef_generic
+vendor: Generic
+product: CEF
+format: cef
+version: "1"
+description: "Fallback mapping for CEF sources without a vendor-specific adapter."
+
+ocsf:
+  class_uid: 4001
+  class_name: "Network Activity"
+  category_uid: 4
+  category_name: "Network Activity"
+
+event_action_field: name
+
+severity_field: severity
+severity_map:
+  "0": Informational
+  "1": Informational
+  "2": Informational
+  "3": Low
+  "4": Medium
+  "5": Medium
+  "6": High
+  "7": High
+  "8": Very-High
+  "9": Very-High
+  "10": Very-High
+
+product_version_field: device_version
+
+field_map:
+  src: { target: "network.src_ip" }
+  dst: { target: "network.dst_ip" }
+  spt: { target: "network.src_port", type: "int" }
+  dpt: { target: "network.dst_port", type: "int" }
+  proto: { target: "network.protocol" }
+  # suser (source user) and duser (destination user) are semantically
+  # distinct in CEF; our current schema only has one "user" actor group,
+  # so suser maps there and duser is preserved as a flat field rather
+  # than colliding with it.
+  suser: { target: "user.name" }
+  duser: { target: "destination_user" }
+  act: { target: "action_taken" }
+  signature_id: { target: "signature_id" }
+  device_vendor: { target: "device_vendor" }
+  device_product: { target: "device_product" }

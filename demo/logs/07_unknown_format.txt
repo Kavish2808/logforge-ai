@@ -1,0 +1,1 @@
+2026-01-18 12:15:00 | custom_app | level=ERROR | payment gateway timeout after 30s

@@ -1,0 +1,75 @@
+"""FastAPI application entrypoint."""
+import logging
+
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.api.routes import events, health, ingest
+from app.config import get_settings
+from app.core.logging import configure_logging
+from app.schema.errors import ErrorDetail, ErrorResponse
+
+settings = get_settings()
+configure_logging(debug=settings.debug)
+
+logger = logging.getLogger(__name__)
+
+# `debug=False` always: Starlette's debug mode renders unhandled exceptions
+# as an HTML page containing the full stack trace, which must never reach
+# an API client. `settings.debug` still controls logging verbosity and
+# uvicorn's --reload behavior in docker-compose, just not this.
+app = FastAPI(title=settings.app_name, debug=False)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    fields = {".".join(str(p) for p in err["loc"] if p != "body"): err["msg"] for err in exc.errors()}
+    body = ErrorResponse(error=ErrorDetail(code="VALIDATION_ERROR", message="Request validation failed", fields=fields))
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=body.model_dump())
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    # Registered on Starlette's base HTTPException (not fastapi.HTTPException,
+    # a subclass) so this also catches routing-level errors Starlette raises
+    # itself — 404 for unmatched routes, 405 Method Not Allowed, etc. — not
+    # just the ones our own route handlers raise.
+    code = {
+        status.HTTP_404_NOT_FOUND: "NOT_FOUND",
+        status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
+        status.HTTP_405_METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
+    }.get(exc.status_code, "HTTP_ERROR")
+    body = ErrorResponse(error=ErrorDetail(code=code, message=str(exc.detail)))
+    return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # Full details go to the server log only. The client gets a generic,
+    # safe message — never a stack trace, file path, or DB error string.
+    logger.exception("Unhandled exception while processing %s %s", request.method, request.url.path)
+    body = ErrorResponse(
+        error=ErrorDetail(code="INTERNAL_ERROR", message="An unexpected error occurred. Please try again.")
+    )
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=body.model_dump())
+
+
+app.include_router(health.router)
+app.include_router(ingest.router, prefix=settings.api_v1_prefix)
+app.include_router(events.router, prefix=settings.api_v1_prefix)
+
+
+@app.get("/")
+def root() -> dict:
+    return {"service": settings.app_name, "status": "running"}

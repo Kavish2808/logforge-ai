@@ -1,0 +1,51 @@
+# Palo Alto Networks PAN-OS logs exported in CEF format, e.g.:
+#   <134>Jan 18 12:10:00 PA-VM CEF:0|Palo Alto Networks|PAN-OS|10.2.0|traffic|
+#   THREAT|5|src=10.0.0.30 dst=93.184.216.34 spt=51500 dpt=443 proto=tcp
+#   act=allow suser=jdoe cs1Label=URL cs1=example.com
+id: paloalto_cef
+vendor: Palo Alto Networks
+product: PAN-OS
+format: cef
+version: "1"
+description: "Palo Alto Networks PAN-OS logs in CEF export format."
+
+match:
+  format: cef
+  field: device_vendor
+  equals: "Palo Alto Networks"
+
+ocsf:
+  class_uid: 4001
+  class_name: "Network Activity"
+  category_uid: 4
+  category_name: "Network Activity"
+
+event_type: "Firewall"
+event_action_field: name
+
+severity_field: severity
+severity_map:
+  "1": Informational
+  "2": Informational
+  "3": Low
+  "4": Medium
+  "5": Medium
+  "6": High
+  "7": High
+  "8": Very-High
+  "9": Very-High
+  "10": Very-High
+
+product_version_field: device_version
+
+field_map:
+  src: { target: "network.src_ip" }
+  dst: { target: "network.dst_ip" }
+  spt: { target: "network.src_port", type: "int" }
+  dpt: { target: "network.dst_port", type: "int" }
+  proto: { target: "network.protocol" }
+  act: { target: "action_taken" }
+  suser: { target: "user.name" }
+  cs1Label: { target: "cs1_label" }
+  cs1: { target: "cs1_value" }
+  signature_id: { target: "signature_id" }

@@ -1,0 +1,29 @@
+# Fallback mapping for JSON logs that don't match any vendor-specific
+# adapter. Maps common/conventional JSON field names when present.
+id: json_generic
+vendor: Generic
+product: JSON
+format: json
+version: "1"
+description: "Fallback mapping for unrecognized JSON sources."
+
+ocsf:
+  class_uid: 6003
+  class_name: "Application Activity"
+  category_uid: 6
+  category_name: "Application Activity"
+
+event_action_field: message
+
+severity_field: severity
+
+timestamp_field: timestamp
+
+field_map:
+  message: { target: "event_message" }
+  src_ip: { target: "network.src_ip" }
+  dst_ip: { target: "network.dst_ip" }
+  src_port: { target: "network.src_port", type: "int" }
+  dst_port: { target: "network.dst_port", type: "int" }
+  protocol: { target: "network.protocol" }
+  user: { target: "user.name" }

@@ -1,0 +1,1 @@
+<165>1 2026-01-18T12:00:00.000Z webserver01 myapp 1234 ID47 - Application started successfully
