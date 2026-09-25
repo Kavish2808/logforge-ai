@@ -1,6 +1,12 @@
 # LogForge AI
 
-**Universal Adaptive Log Pre-processing Framework — MVP (Phases 0–4 hardened, Phase 3 adaptive onboarding, Phase 5 drift detection)**
+**Universal Adaptive Log Pre-processing Framework — MVP (Phases 0–4 hardened, Phase 3 adaptive onboarding, Phase 5 drift detection, Phase 6 continuous adaptive learning)**
+
+> **A log parser that learns:** LogForge can learn a new vendor, detect when
+> that vendor changes, explain the change, learn an approved structural
+> evolution, safely validate the new parser version, require human approval,
+> activate the new version, preserve previous versions, and continue
+> detecting future changes.
 
 LogForge AI takes raw security/application logs in whatever format they arrive
 in, and turns them into a consistent, OCSF-aligned structured event —
@@ -14,7 +20,14 @@ Unknown source → Learn from samples → Validate → Human approval → Versio
 
 > **Phases.** Phase 3 — *adaptive onboarding*: "I have never seen this source — learn it."
 > Phase 5 — *drift detection*: "I know this source — something about it changed."
-> Phase 6 (future) — "this approved change has become part of what I know."
+> Phase 6 — *continuous adaptive learning*: "this approved change has become part of what I know."
+>
+> ```
+> New vendor → Phase 3 learn → human approval → adapter v1 → production logs
+> → Phase 5 drift → explain → human accepts → Phase 6 learn the change
+> → sandbox (new + historical logs) → human approval → activate v2
+> → future logs use v2 → Phase 5 keeps monitoring against the learned structure ↺
+> ```
 
 ## What it does today
 
@@ -59,6 +72,9 @@ backend/app/
     hashing.py        SHA-256 of the raw payload
     orchestrator.py   wires the above into one deterministic pipeline
   adapters/        YAML vendor mappings + loader/registry (validated, no code)
+  learning/        Phase 6: learning delta (schema/review/apply), deterministic
+                    learning engine, optional LLM assistant, learning sandbox,
+                    report — used only through the learning API, never at runtime
   onboarding/      Phase 3: sample analysis, suggestion providers (Claude /
                     offline), proposal schema + evidence review, sandbox,
                     explanation — used during onboarding only, never at runtime
@@ -133,6 +149,12 @@ overwritten.
 | POST | `/api/v1/onboarding/sessions/{id}/approve` · `/reject` | Human decision; only a PASSED proposal version can be approved |
 | GET | `/api/v1/onboarding/adapters` · `/adapters/{adapter_id}` | Versioned onboarded adapters |
 | POST | `/api/v1/onboarding/adapters/{adapter_id}/rollback` | Withdraw the active version; the previous version becomes active again |
+| POST | `/api/v1/events/{event_id}/learning/propose` | Phase 6: learn a human-accepted drift of an onboarded adapter (explicit action) |
+| GET | `/api/v1/learning/sessions` · `/sessions/{id}` | List learning sessions (`source_key`, `status`) · full session with evidence, delta, validation, report |
+| POST | `/api/v1/learning/sessions/{id}/validate` | Re-run the learning sandbox |
+| PUT | `/api/v1/learning/sessions/{id}/proposal` | Submit a human-edited learning delta (same gates) |
+| POST | `/api/v1/learning/sessions/{id}/approve` · `/request-review` · `/reject` | Human decisions (`approve` accepts `activate: true` for APPROVE & ACTIVATE) |
+| POST | `/api/v1/learning/sessions/{id}/activate` · `/rollback` | Explicit, idempotent activation of the new version · rollback to the previous version |
 
 `GET /drift/baselines/{source_key}` and the accept response include the
 source's structural `history`; every event's full drift record (including
@@ -259,6 +281,99 @@ Every session response includes an evidence-based `explanation` (format and
 share of samples, why the vendor was suggested, each mapping with its
 presence count, uncertain fields, sandbox result, why it passed/failed, and
 exactly what becomes active on approval).
+
+## Continuous adaptive learning (Phase 6)
+
+Phase 5 detects that a known source changed; Phase 6 learns that change —
+only when a human has accepted it, and only through explicit approval and
+activation. The production runtime stays deterministic: learning is never on
+the ingestion path, and no LLM ever touches runtime parsing.
+
+**Eligibility.** A Phase 5 `DRIFT` event whose drift a human accepted
+(`add_variant` or `replace_baseline`), on an **onboarded** adapter. Unreviewed,
+`acknowledged` and `POSSIBLE_FORMAT_DRIFT` events are not learnable; shipped
+YAML adapters (Cisco/Fortinet/Palo Alto) are frozen and never evolved.
+Accepting a variant alone never creates a version — learning is a separate,
+explicit action (`POST /events/{id}/learning/propose`).
+
+**Evidence** (stored events, referenced by id + SHA-256 — no copies): the
+drifted events with exactly the new structure, and recently processed events
+of previously accepted structures (regression evidence), plus the drift
+snapshot, the old and new structural fingerprints and the baseline's
+approved variants.
+
+**Learning = the minimal declarative delta** from the current version
+(`app/learning/engine.py`; never code, never regex):
+
+| Mode | Learned as |
+|---|---|
+| `FIELD_ADDITION` | map the new field when its name follows a target's convention and its values fit (HIGH if present in all drifted samples, MEDIUM otherwise); else keep it in extensions |
+| `FIELD_REMOVAL` | keep the mapping (historical meaning is never deleted) and record the field in `optional_fields` |
+| `SEMANTIC_REMAP` | a removed mapped field and an added field with the same value class whose name follows the same target's convention (HIGH) or occupies the same position (MEDIUM); the target never changes. For field-map targets the new field is added as an alias, so historical logs keep normalizing |
+| `FIELD_TYPE_CHANGE` | keep the mapping only if the new values still fit the target/coercion; otherwise stop mapping it (→ extensions) and require a human mapping decision |
+| `FIELD_ORDER_CHANGE` | nothing to learn (`NO_CHANGE_REQUIRED`) |
+| `FORMAT_DRIFT` | never learned automatically (needs review) |
+
+Every mapping lists its evidence (e.g. "'username' observed in 12/12 drifted
+samples", "values: string", "name follows the user.name naming convention").
+**Confidence grades the evidence behind a mapping, not the sandbox result:**
+`HIGH`/`MEDIUM` are assigned only by the deterministic engine (naming
+convention + value class + presence in the drifted samples); `LOW` is assigned
+only to assistant suggestions. Sandbox results (match rate, compatibility,
+preservation) are reported separately in `validation`.
+An optional LLM assistant (Claude when `ANTHROPIC_API_KEY` is set) may only
+suggest targets for *unresolved added* fields; its output is strictly
+schema-validated, filtered against the allow-list and evidence, gets LOW
+confidence, and any failure falls back to the deterministic result.
+
+**Safety review** rejects (never executes) a delta that has unknown keys,
+maps a field that wasn't observed or wasn't changed by the approved drift,
+uses a non-allow-listed target, maps a target another present field already
+has, or changes an existing mapping's meaning.
+
+**Learning sandbox** (`app/learning/validation.py`) runs the candidate
+version through the real pipeline on the drifted events (match rate ≥
+`ONBOARDING_MIN_MATCH_RATE`, 90%) **and** the historical events, which must
+normalize identically under the new version (backward compatibility). It
+also verifies raw + SHA-256 preservation and that every matched sample
+produced a normalized event. Result: `PASSED` / `NEEDS_REVIEW` / `REJECTED`
+(thresholds reuse the Phase 3 settings). If only backward compatibility is
+below threshold, approval requires `confirm_supersede: true`.
+
+**State machine** (`learning_sessions.status`):
+
+```
+PROPOSED → VALIDATED | NEEDS_REVIEW | FAILED | NO_CHANGE_REQUIRED
+VALIDATED → APPROVED → ACTIVE → ROLLED_BACK        (REJECTED from any open state)
+```
+
+Invalid transitions return `409` (e.g. activate without approval, anything
+after REJECTED). Activation is idempotent (`ACTIVE → ACTIVE` changes
+nothing), locks the session row, refuses a proposal whose base version is no
+longer active, refuses a mapping identical to any existing version, and the
+Phase 3 one-ACTIVE-version index makes two active versions impossible.
+
+**Activation** creates the next immutable version in `onboarded_adapters`
+(previous version `SUPERSEDED`; `validation_summary.origin =
+"phase6_learning"` + the learning session id answers "why does v2 exist?"),
+and closes the loop with Phase 5: the learned structure becomes the source's
+baseline reference, the previous reference is kept as an approved variant,
+and a `BASELINE_LEARNED` history row is written. Future drift is measured
+against the learned structure. **Rollback** reuses Phase 3 semantics (v2
+`ROLLED_BACK`, v1 active again); nothing is deleted.
+
+Every session carries its decision history (who/what/when/why), the mapping
+diff (added / removed / changed / unchanged), a risk level (LOW / MEDIUM /
+HIGH), a recommendation, and a deterministic `report`:
+
+```
+Source: acmefw_acmefw          Current adapter: acmefw_acmefw v1 → Proposed v2
+Trigger: FIELD_ADDITION        Evidence: 6 drifted event(s), 10 historical event(s)
+Change:  + username + sessionid + app
+Mapping: + username → user.name [HIGH]  · 'username' observed in 6/6 drifted samples …
+Sandbox: 6/6 new samples passed; 10/10 historical samples normalize identically
+Critical fields: none affected   Risk: LOW   Recommendation: APPROVE_VERSION
+```
 
 ## Drift detection (Phase 5)
 
@@ -558,7 +673,11 @@ Tests are organized as:
   preservation, error envelopes, request-size limits, drift detection and
   human review, and the end-to-end onboarding flow (suggest → sandbox →
   approve/reject → versioned adapter → future auto-parsing → rollback,
-  including malformed/unavailable LLM and code-injection attempts).
+  including malformed/unavailable LLM and code-injection attempts), and the
+  Phase 6 adaptive loop (eligibility, every learning mode, delta safety,
+  sandbox + historical compatibility, approval/activation/rollback, version
+  duplicates, idempotent and concurrent activation, Phase 5 baseline
+  feedback, LLM assistant failure paths, migration round trip).
 
 Integration tests run against a dedicated `<db name>_test` database
 (created automatically on first run), never the database a running
@@ -609,6 +728,19 @@ do alongside a live demo without touching its data.
   identifiers to be mappable.
 - **Onboarding: approvals are unauthenticated** — `approved_by` is free text
   (there is no user system in this MVP).
+- **Learning (Phase 6) evolves onboarded adapters only**; shipped YAML adapters
+  are frozen. Learning evidence is limited to the most recent stored events
+  (bounded pools), and semantic renames are proposed only on name-convention
+  or same-position evidence — anything else stays unresolved for a human.
+- **Learning: live Anthropic inference was not executed** (no API key was
+  available); the optional learning assistant is covered by mocked HTTP,
+  schema-validation, refusal/error and fallback tests. No live Claude result
+  is claimed. Learning is fully functional offline.
+- **Known pre-existing defect (Phase 0-4, not changed here):** a value that
+  cannot be coerced into a *typed* OCSF group field (e.g. a JSON object in a
+  field mapped to `network.dst_port`) is persisted, but building the API
+  response then fails and the service's safety net stores a second, raw-only
+  `FAILED` event for the same log.
 - **Onboarding: live Anthropic inference was not executed because no API key
   was available.** The provider integration is covered by mocked HTTP, schema
   validation, fallback, refusal/error handling, and regression tests. No live
@@ -624,8 +756,6 @@ do alongside a live demo without touching its data.
 
 ## Not yet implemented (by design — future phases)
 
-- **Phase 6** — "this approved change has become part of what I know":
-  feeding approved drift/onboarding outcomes back into the known-source model.
 - Dashboard UI with processing metrics.
 - Kafka, OpenSearch, MinIO, dead-letter queue, horizontal workers — all
   explicitly deferred per the PRD.

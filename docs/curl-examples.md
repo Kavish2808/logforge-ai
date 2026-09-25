@@ -216,7 +216,43 @@ Or reject (`POST .../reject {"reason": "..."}`), edit the proposal
 (`GET /api/v1/onboarding/adapters/acmefw_acmefw`) and roll back
 (`POST /api/v1/onboarding/adapters/acmefw_acmefw/rollback`).
 
-## 13. Error responses (consistent envelope)
+## 13. Learning an approved change (Phase 6)
+
+Continuing from step 12 (ACMEFW onboarded as `acmefw_acmefw` v1). The vendor
+starts sending three extra fields; Phase 5 flags it:
+
+```bash
+DRIFT_ID=$(curl -s -X POST http://localhost:8000/api/v1/ingest -H "Content-Type: application/json" \
+  -d '{"raw_log": "vendor=ACMEFW ts=2026-01-19T09:00:00Z srcip=10.0.0.7 dstip=8.8.8.8 srcport=40007 dstport=443 action=allow sev=high username=jdoe sessionid=s-7 app=web"}' \
+  | jq -r .event_id)
+curl -s "http://localhost:8000/api/v1/events/$DRIFT_ID" | jq -r .processing_metadata.drift.explanation
+```
+
+A human accepts the drift as legitimate (Phase 5), then explicitly asks
+LogForge to learn it:
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/events/$DRIFT_ID/drift/accept" \
+  -H "Content-Type: application/json" -d '{"mode": "add_variant", "note": "vendor firmware update"}' >/dev/null
+LEARN=$(curl -s -X POST "http://localhost:8000/api/v1/events/$DRIFT_ID/learning/propose" \
+  -H "Content-Type: application/json" -d '{"assistant": "auto", "requested_by": "analyst"}')
+echo "$LEARN" | jq -r .report
+LEARN_ID=$(echo "$LEARN" | jq -r .id)
+```
+
+Nothing is active yet. Approve and activate (explicit human action):
+
+```bash
+curl -s -X POST "http://localhost:8000/api/v1/learning/sessions/$LEARN_ID/approve" -H "Content-Type: application/json" \
+  -d '{"proposal_version": 1, "approved_by": "lead", "note": "reviewed", "activate": true}' \
+  | jq '{status, target_version, target_version_status}'
+```
+
+Future logs use v2 (new fields normalized) and Phase 5 now expects the
+learned structure; roll back with
+`POST /api/v1/learning/sessions/$LEARN_ID/rollback`.
+
+## 14. Error responses (consistent envelope)
 
 A non-existent event:
 

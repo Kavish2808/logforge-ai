@@ -123,6 +123,11 @@ class AdapterMapping(BaseModel):
     # (human-approved onboarding result). Reported as
     # processing_metadata.adapter_source on every event it normalizes.
     source: str = "manual"
+    # Phase 6 learning: raw fields that a human-approved structural evolution
+    # showed to be absent in newer logs. Their mappings are kept (historical
+    # meaning is never deleted); the list documents that absence is expected.
+    # Informational only — normalization already skips missing fields.
+    optional_fields: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _declarative_consistency(self) -> "AdapterMapping":
