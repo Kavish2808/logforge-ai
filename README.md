@@ -736,11 +736,12 @@ do alongside a live demo without touching its data.
   available); the optional learning assistant is covered by mocked HTTP,
   schema-validation, refusal/error and fallback tests. No live Claude result
   is claimed. Learning is fully functional offline.
-- **Known pre-existing defect (Phase 0-4, not changed here):** a value that
-  cannot be coerced into a *typed* OCSF group field (e.g. a JSON object in a
-  field mapped to `network.dst_port`) is persisted, but building the API
-  response then fails and the service's safety net stores a second, raw-only
-  `FAILED` event for the same log.
+- **Values that don't fit a typed OCSF group field are not converted.** A
+  value that fails type validation for `network.*`, `user.*` or `process.*`
+  (e.g. Fortinet `dstport=-`, a numeric JSON `user`) is not mapped: it is kept
+  under `extensions` with its original value, a warning is recorded, and the
+  event is `PARTIAL`. Ingestion persists exactly one event row per log, and
+  these events stay readable through list, detail and reprocess.
 - **Onboarding: live Anthropic inference was not executed because no API key
   was available.** The provider integration is covered by mocked HTTP, schema
   validation, fallback, refusal/error handling, and regression tests. No live

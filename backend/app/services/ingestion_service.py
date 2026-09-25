@@ -71,6 +71,10 @@ def ingest_raw_log(db: Session, raw_log: str) -> UniversalEvent:
         fields = _pipeline_result_fields(result)
         drift_service.evaluate(db, fields, event_id, adapter_registry=registry)  # Phase 5; never raises
         event = Event(event_id=event_id, **fields)
+        # Validate the response shape BEFORE persisting: if it could not be
+        # read back, the fallback below must be the only row written for this
+        # request (never a second row next to an already-committed one).
+        UniversalEvent.model_validate(event, from_attributes=True)
         saved = event_repo.create_event(db, event)
         return UniversalEvent.model_validate(saved, from_attributes=True)
     except Exception as exc:  # noqa: BLE001

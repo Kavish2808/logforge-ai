@@ -113,8 +113,12 @@ def test_conflicting_field_map_targets_do_not_silently_overwrite():
 
 
 def test_failed_type_coercion_produces_warning_and_keeps_original_value():
+    # The original value is kept, but in extensions: a value that does not fit
+    # the typed OCSF field (network.dst_port: int) must never be placed there,
+    # or the stored event cannot be read back (duplicate-event / 500 defect).
     adapter = _make_adapter(field_map={"dst_port": {"target": "network.dst_port", "type": "int"}})
     result = normalize({"dst_port": "not-a-port"}, adapter)
 
-    assert result.network["dst_port"] == "not-a-port"
-    assert any("coerce" in w.lower() for w in result.warnings)
+    assert "dst_port" not in result.network
+    assert result.extensions["dst_port"] == "not-a-port"
+    assert any("dst_port" in w and "preserved in extensions" in w for w in result.warnings)

@@ -8,9 +8,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from pydantic import TypeAdapter, ValidationError
+
 from app.pipeline.normalizer.extension_handler import compute_extensions
 from app.pipeline.normalizer.field_normalizer import coerce_type, parse_timestamp
 from app.schema.adapter import AdapterMapping
+from app.schema.ocsf import NetworkInfo, ProcessInfo, UserInfo
 
 
 @dataclass
@@ -32,6 +35,32 @@ class NormalizationResult:
     extensions: dict[str, Any]
     event_timestamp: datetime | None
     warnings: list[str] = field(default_factory=list)
+
+
+# Typed OCSF groups, validated with exactly the field types the read model
+# (UniversalEvent) uses, so a stored event can always be read back.
+_GROUP_MODELS = {"network": NetworkInfo, "user": UserInfo, "process": ProcessInfo}
+_GROUP_ADAPTERS: dict[str, TypeAdapter] = {
+    f"{group}.{name}": TypeAdapter(info.annotation)
+    for group, model in _GROUP_MODELS.items()
+    for name, info in model.model_fields.items()
+}
+
+
+def _typed_group_error(target: str, value: Any) -> str | None:
+    adapter = _GROUP_ADAPTERS.get(target)
+    if adapter is None:
+        return None
+    try:
+        adapter.validate_python(value)
+    except ValidationError as exc:
+        return exc.errors()[0]["msg"]
+    return None
+
+
+def _short(value: Any, limit: int = 80) -> str:
+    text = repr(value)
+    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 def normalize(parsed_fields: dict[str, Any], adapter: AdapterMapping) -> NormalizationResult:
@@ -60,9 +89,21 @@ def normalize(parsed_fields: dict[str, Any], adapter: AdapterMapping) -> Normali
             )
             continue
 
+        value, coerce_warning = coerce_type(parsed_fields[source_key], entry.type)
+        type_error = _typed_group_error(target, value)
+        if type_error is not None:
+            # The value does not fit the typed OCSF group field (e.g. "-" for
+            # network.dst_port). Placing it there would produce an event that
+            # cannot be read back, so it is not mapped: the source field stays
+            # in extensions with its original value and the event is PARTIAL.
+            warnings.append(
+                f"{source_key}: value {_short(parsed_fields[source_key])} is not a valid {target} ({type_error}); "
+                f"'{source_key}' was preserved in extensions instead."
+            )
+            continue
+
         consumed_keys.add(source_key)
         used_targets.add(target)
-        value, coerce_warning = coerce_type(parsed_fields[source_key], entry.type)
         if coerce_warning:
             warnings.append(f"{source_key}: {coerce_warning}")
 
