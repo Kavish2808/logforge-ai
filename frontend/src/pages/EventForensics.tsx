@@ -2,6 +2,7 @@
 // /views/events/{id}/lineage (+ the stored event), nothing is inferred here.
 import { getEvent, getEvents, getLineage } from "../api/endpoints";
 import type { AccountedField, Lineage, LineageStage, UniversalEvent } from "../api/types";
+import { EvidenceCard } from "../components/EvidenceCard";
 import { Badge, Card, Id, Json, KV, Load, Tabs } from "../components/ui";
 import { fmtTime, num } from "../lib/format";
 import { Link } from "../lib/router";
@@ -264,6 +265,7 @@ export function EventForensics({ id }: { id: string }) {
                   ) : <div className="faint">Loading event…</div>}
                 </Card>
                 <Card title="Field accounting"><Accounting lineage={l} /></Card>
+                <EvidenceCard lineage={l} />
               </div>
             </div>
             <Card title="Raw vs normalized" className="" >

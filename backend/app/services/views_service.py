@@ -21,6 +21,7 @@ from app.db.repository import views_repo as repo
 from app.learning.delta import current_mappings
 from app.pipeline.hashing import sha256_hex
 from app.schema.adapter import AdapterMapping
+from app.services import alert_service, audit_service, evidence_service, export_service, sla_service
 
 OK, WARN, FAIL, SKIPPED = "OK", "WARN", "FAIL", "SKIPPED"
 
@@ -39,6 +40,7 @@ class ViewsNotFound(Exception):
 def event_row(e: Event) -> dict[str, Any]:
     pm = e.processing_metadata or {}
     drift = pm.get("drift") if isinstance(pm.get("drift"), dict) else {}
+    spill = pm.get("extension_spill") if isinstance(pm.get("extension_spill"), dict) else {}
     return {
         "event_id": e.event_id, "received_at": e.received_at, "event_timestamp": e.event_timestamp,
         "status": e.status, "format_detected": e.format_detected, "vendor": e.vendor, "product": e.product,
@@ -47,8 +49,11 @@ def event_row(e: Event) -> dict[str, Any]:
         "ocsf_class_name": e.ocsf_class_name, "ocsf_category_name": e.ocsf_category_name,
         "event_type": e.event_type, "event_action": e.event_action, "severity": e.severity,
         "drift_status": drift.get("status"), "drift_severity": drift.get("severity"),
-        "warning_count": len(e.warnings or []), "preserved_field_count": len(e.extensions or {}),
+        "warning_count": len(e.warnings or []),
+        "preserved_field_count": len(e.extensions or {}) + int(spill.get("overflow_field_count") or 0),
         "raw_hash": e.raw_hash,
+        "extension_storage": spill.get("mode") or "INLINE",
+        "overflow_field_count": int(spill.get("overflow_field_count") or 0),
     }
 
 
@@ -130,6 +135,9 @@ def lineage(db: Session, event_id: str) -> dict[str, Any]:
     fp = e.structural_fingerprint or {}
     parsed: list[str] = list(fp.get("field_order") or [])
     extensions: dict[str, Any] = dict(e.extensions or {})
+    # Phase 7: spilled extensions live in overflow storage; they are preserved, not lost.
+    overflow = evidence_service.overflow_for(db, e.event_id)
+    overflow_fields: dict[str, Any] = dict(overflow.payload) if overflow else {}
     chain: list[dict[str, Any]] = []
 
     def stage(name, outcome, summary_text, **details):
@@ -183,7 +191,7 @@ def lineage(db: Session, event_id: str) -> dict[str, Any]:
               event_timestamp=e.event_timestamp, status=e.status)
 
     # FIELD ACCOUNTING
-    accounting = _field_accounting(e, parsed, extensions, mapping)
+    accounting = _field_accounting(e, parsed, extensions, mapping, overflow_fields)
     if e.status == "FAILED":
         stage("FIELD_ACCOUNTING", SKIPPED, "No fields were parsed; the raw event is preserved verbatim")
     else:
@@ -249,7 +257,25 @@ def lineage(db: Session, event_id: str) -> dict[str, Any]:
         f"Every lossy or partial step is recorded as a warning ({len(warnings)}).",
     ]
     return {"event_id": e.event_id, "status": e.status, "chain": chain, "integrity": integrity,
-            "field_accounting": accounting, "nothing_silently_discarded": not silent, "basis": basis}
+            "field_accounting": accounting, "nothing_silently_discarded": not silent, "basis": basis,
+            "evidence": _evidence(db, e, overflow)}
+
+
+def _evidence(db: Session, e: Event, overflow) -> dict[str, Any]:
+    """Phase 7 storage/integrity facts for one event (read-only)."""
+    storage = evidence_service.raw_storage_map(db, [e.event_id]).get(e.event_id)
+    member = evidence_service.membership_map(db, [e.event_id]).get(e.event_id)
+    return {
+        "extension_storage": {
+            "mode": "SPILLED" if overflow else "INLINE",
+            "inline_field_count": len(e.extensions or {}),
+            "overflow_field_count": overflow.field_count if overflow else 0,
+            "overflow_bytes": overflow.byte_size if overflow else 0,
+            "overflow_sha256": overflow.payload_sha256 if overflow else None,
+        },
+        "raw_storage": evidence_service.storage_dict(storage),
+        "merkle": member,
+    }
 
 
 def _adapter_at_version(db: Session, e: Event) -> tuple[AdapterMapping | None, dict[str, Any]]:
@@ -301,14 +327,19 @@ def _normalized_value(e: Event, target: str) -> Any:
     return (e.normalized_event or {}).get(target)
 
 
-def _field_accounting(e: Event, parsed: list[str], extensions: dict[str, Any], mapping: AdapterMapping | None) -> dict[str, Any]:
+def _field_accounting(e: Event, parsed: list[str], extensions: dict[str, Any], mapping: AdapterMapping | None,
+                      overflow: dict[str, Any] | None = None) -> dict[str, Any]:
     targets = current_mappings(mapping) if mapping is not None else {}
+    overflow = overflow or {}
     fields: list[dict[str, Any]] = []
     unaccounted: list[str] = []
     for name in parsed:
         if name in extensions:
             fields.append({"field": name, "outcome": "PRESERVED", "location": f"extensions.{name}",
                            "value": extensions[name]})
+        elif name in overflow:
+            fields.append({"field": name, "outcome": "PRESERVED", "location": f"extension_overflow.{name}",
+                           "value": overflow[name]})
         elif name in targets:
             target = targets[name]["target"]
             value = _normalized_value(e, target)
@@ -317,11 +348,12 @@ def _field_accounting(e: Event, parsed: list[str], extensions: dict[str, Any], m
         else:
             fields.append({"field": name, "outcome": "UNACCOUNTED"})
             unaccounted.append(name)
-    stray = sorted(set(extensions) - set(parsed))
+    stray = sorted((set(extensions) | set(overflow)) - set(parsed))
     return {
         "parsed_count": len(parsed),
         "mapped_count": sum(1 for f in fields if f["outcome"] == "MAPPED"),
         "preserved_count": sum(1 for f in fields if f["outcome"] == "PRESERVED"),
+        "preserved_in_overflow": sum(1 for f in fields if str(f.get("location", "")).startswith("extension_overflow.")),
         "unaccounted": unaccounted,
         "extensions_not_in_parse": stray,
         "fields": fields,
@@ -494,3 +526,27 @@ def _as_datetime(value: Any) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+# --------------------------------------------------------------------------
+# Phase 7: trust / governance / integration summary
+# --------------------------------------------------------------------------
+
+
+def trust_summary(db: Session) -> dict[str, Any]:
+    from sqlalchemy import func, select
+
+    from app.db.models.governance import ConfidenceLedgerEntry
+
+    ledger = dict(db.execute(select(ConfidenceLedgerEntry.subject_type, func.count())
+                             .group_by(ConfidenceLedgerEntry.subject_type)).all())
+    return {
+        "extension_overflow": evidence_service.overflow_stats(db),
+        "raw_vault": evidence_service.vault_stats(db),
+        "integrity": evidence_service.integrity_stats(db),
+        "reviews": sla_service.stats(db),
+        "confidence": {"ledger_entries": ledger, "total": sum(ledger.values())},
+        "audit": audit_service.stats(db),
+        "alerts": alert_service.counts(db),
+        "exports": export_service.stats(db),
+    }

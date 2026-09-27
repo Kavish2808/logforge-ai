@@ -33,6 +33,9 @@ class EventRow(BaseModel):
     warning_count: int
     preserved_field_count: int
     raw_hash: str
+    # Phase 7 (additive): where extensions live and how many spilled to overflow storage.
+    extension_storage: str = "INLINE"
+    overflow_field_count: int = 0
 
 
 class EventPage(BaseModel):
@@ -86,6 +89,8 @@ class Lineage(BaseModel):
     field_accounting: dict[str, Any]
     nothing_silently_discarded: bool
     basis: list[str]
+    # Phase 7 (additive): extension storage, cold raw copy and Merkle sealing for this event.
+    evidence: dict[str, Any] | None = None
 
 
 class SourceSummary(BaseModel):
@@ -128,3 +133,16 @@ class TimelineEntry(BaseModel):
 class Timeline(BaseModel):
     source_key: str
     entries: list[TimelineEntry]
+
+
+class TrustSummary(BaseModel):
+    """Phase 7 operational intelligence: trust, governance and integration state."""
+
+    extension_overflow: dict[str, Any]
+    raw_vault: dict[str, Any]
+    integrity: dict[str, Any]
+    reviews: dict[str, Any]
+    confidence: dict[str, Any]
+    audit: dict[str, Any]
+    alerts: dict[str, Any]
+    exports: dict[str, Any]

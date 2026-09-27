@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { getLearning, learningAction, listLearning } from "../api/endpoints";
 import type { LearningSession } from "../api/types";
+import { ActingAs, ConfidenceCard, SlaPanel } from "../components/trust";
 import { Badge, Card, KV, Load, Pipeline, Stat } from "../components/ui";
 import { fmtTime, providerLabel } from "../lib/format";
+import { useAuth } from "../lib/auth";
 import { Link, navigate } from "../lib/router";
 import { errorMessage, useApi } from "../lib/useApi";
 
@@ -67,6 +69,8 @@ function List() {
 
 function Actions({ s, onDone }: { s: LearningSession; onDone: (updated: LearningSession) => void }) {
   const [by, setBy] = useState("");
+  const { user } = useAuth();
+  const who = user ? user.username : by;  // bound to the signed-in identity (Phase 7 RBAC)
   const [note, setNote] = useState("");
   const [confirmSupersede, setConfirmSupersede] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -89,7 +93,7 @@ function Actions({ s, onDone }: { s: LearningSession; onDone: (updated: Learning
   };
 
   const approveBody = (activate: boolean) => ({
-    proposal_version: s.proposal_version, approved_by: by || null, note: note || null, confirm_supersede: confirmSupersede, activate,
+    proposal_version: s.proposal_version, approved_by: who || null, note: note || null, confirm_supersede: confirmSupersede, activate,
   });
   const reason = note || "no reason given";
 
@@ -97,7 +101,7 @@ function Actions({ s, onDone }: { s: LearningSession; onDone: (updated: Learning
     <div className="boundary">
       <div className="spread"><strong>Human control</strong><span className="small muted">State: <Badge value={s.status} /></span></div>
       <div className="row" style={{ margin: "10px 0" }}>
-        <input aria-label="Reviewer" placeholder="Reviewer (free text)" value={by} onChange={(e) => setBy(e.target.value)} />
+        <input aria-label="Reviewer" placeholder="Reviewer (free text)" value={who} disabled={!!user} title={user ? "Bound to your signed-in identity" : undefined} onChange={(e) => setBy(e.target.value)} />
         <input aria-label="Note or reason" placeholder="Note / reason" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: 1 }} />
       </div>
       {compat && canApprove && (
@@ -111,11 +115,11 @@ function Actions({ s, onDone }: { s: LearningSession; onDone: (updated: Learning
           <button onClick={() => run("validate", {}, "Re-validated")} disabled={busy}>Re-validate</button>}
         {canApprove && <button onClick={() => run("approve", approveBody(false), "Approved")} disabled={busy || (compat && !confirmSupersede)}>Approve</button>}
         {canApprove && <button className="primary" onClick={() => run("approve", approveBody(true), "Approved & activated")} disabled={busy || (compat && !confirmSupersede)}>Approve &amp; activate</button>}
-        {s.status === "APPROVED" && <button className="primary" onClick={() => run("activate", { activated_by: by || null }, "Activated")} disabled={busy}>Activate v{s.target_version}</button>}
-        {["PROPOSED", "VALIDATED"].includes(s.status) && <button onClick={() => run("request-review", { reason, by: by || null }, "Review requested")} disabled={busy}>Request review</button>}
+        {s.status === "APPROVED" && <button className="primary" onClick={() => run("activate", { activated_by: who || null }, "Activated")} disabled={busy}>Activate v{s.target_version}</button>}
+        {["PROPOSED", "VALIDATED"].includes(s.status) && <button onClick={() => run("request-review", { reason, by: who || null }, "Review requested")} disabled={busy}>Request review</button>}
         {["PROPOSED", "VALIDATED", "NEEDS_REVIEW", "FAILED", "APPROVED", "NO_CHANGE_REQUIRED"].includes(s.status) &&
-          <button className="danger" onClick={() => run("reject", { reason, by: by || null }, "Rejected")} disabled={busy}>Reject</button>}
-        {s.status === "ACTIVE" && <button className="danger" onClick={() => run("rollback", { reason: note || null, requested_by: by || null }, "Rolled back")} disabled={busy}>Roll back v{s.target_version}</button>}
+          <button className="danger" onClick={() => run("reject", { reason, by: who || null }, "Rejected")} disabled={busy}>Reject</button>}
+        {s.status === "ACTIVE" && <button className="danger" onClick={() => run("rollback", { reason: note || null, requested_by: who || null }, "Rolled back")} disabled={busy}>Roll back v{s.target_version}</button>}
         {["REJECTED", "ROLLED_BACK"].includes(s.status) && <span className="small muted">Terminal state — no further actions.</span>}
       </div>
       {msg && <div className={`notice ${msg.kind}`} style={{ marginTop: 10 }} role="status">{msg.text}</div>}
@@ -216,7 +220,12 @@ function Detail({ id }: { id: string }) {
                 {v.compatibility_confirmation_required && <div className="notice warn" style={{ marginTop: 10 }}>Backward compatibility is below threshold — approval requires explicit supersede confirmation.</div>}
                 <ul className="small" style={{ marginTop: 10, paddingLeft: 18 }}>{(v.reasons ?? []).map((r) => <li key={r}>{r}</li>)}</ul>
               </Card>
-              <Card title="Decision"><Actions s={s} onDone={(u) => { setOverride(u); session.reload(); }} /></Card>
+              <Card title="Decision">
+                <ActingAs />
+                {["PROPOSED", "VALIDATED", "NEEDS_REVIEW", "FAILED", "APPROVED"].includes(s.status) && <SlaPanel itemType="LEARNING_SESSION" itemId={s.id} />}
+                <Actions s={s} onDone={(u) => { setOverride(u); session.reload(); }} />
+              </Card>
+              {s.proposal_version > 0 && <ConfidenceCard kind="learning" id={s.id} version={s.proposal_version} />}
               <div className="grid g2" style={{ marginTop: 16 }}>
                 <Card title="History">
                   <table>

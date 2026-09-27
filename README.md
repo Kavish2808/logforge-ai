@@ -36,12 +36,13 @@ Unknown source → Learn from samples → Validate → Human approval → Versio
 
 | Current | Not implemented yet |
 |---|---|
-| Ingestion of syslog (RFC 3164/5424), JSON and CEF; raw + SHA-256 preservation; OCSF-aligned normalization; field accounting | Export backend (the console's Export page is a UI foundation only — no download) |
+| Ingestion of syslog (RFC 3164/5424), JSON and CEF; raw + SHA-256 preservation; OCSF-aligned normalization; field accounting | Removing raw payloads from PostgreSQL (cold-only tier); S3/MinIO vault backend |
 | Unknown-vendor onboarding (offline analyzer by default; Claude provider optional) | LEEF and XML formats |
 | Structural drift detection with mandatory human review | SIEM forwarding, data-lake integration |
-| Continuous adaptive learning with versioning and rollback | Authentication, production deployment profile |
+| Continuous adaptive learning with versioning and rollback | SSO/OAuth/FIDO2, production deployment profile |
 | Read-only operational intelligence API + React console | Queue/worker scale-out architecture (billion-events/day is a target, not a measured result) |
 | Reproducible Demo Mode (CLI and console) | Live Claude inference has **not** been verified (no API key was available) |
+| Phase 7: extension spill, cold raw vault, Merkle evidence chain + local WORM-style anchors, streaming export (`logforge.export.v1`), RBAC + maker-checker + production gate + login lockout, review SLA, confidence ledger, hash-chained audit, alert bus | External WORM / object-lock anchoring; verification against the hosted Slack/Teams services (the adapters are tested over real local HTTP/SMTP servers) |
 
 ## What it does today
 
@@ -301,7 +302,11 @@ red / purple, and human-decision boundaries are drawn as dashed purple boxes.
 | `#/onboarding` · `#/onboarding/{id}` | Onboarding | Session list and new-session form (pasted samples and/or stored FAILED unknown-format events); 7-step view: samples, analysis, suggestion (labelled with the provider that actually produced it), mapping review, sandbox validation, human approval (reject requires a reason), activation |
 | `#/evolution` · `#/evolution/{key}` | Adapter Evolution | Version lane with a confirmed rollback, and the source timeline |
 | `#/learning` · `#/learning/{id}` | Learning | Session list with status filter; detail with drift evidence, mapping diff, proposed mappings with evidence and confidence, sandbox validation, state-dependent human actions (validate, approve, approve & activate, activate, request review, reject, rollback), history and report |
-| `#/export` | Export | **UI foundation only**: filters, format choice and the real matching count; the download is disabled because the export backend is not implemented |
+| `#/export` | Export | Views filters, NDJSON / JSON output, max-events bound, optional raw payloads, streaming download through `/export/events`, "next page" via cursor, recent export activity |
+| `#/integrity` | Integrity | Merkle chain (verify / seal now / batch list with anchors), per-event integrity check and byte-exact raw recovery from the cold vault, hot/cold distribution, extension overflow with onboarding evidence |
+| `#/alerts` | Alerts | Open / acknowledged alerts with severity, read/unread, acknowledgement, delivery outcome per channel, channel configuration status |
+| `#/audit` | Audit Log | Hash-chained audit records (actor, role, action, object, decision, evidence, hashes) with chain verification that flags broken records |
+| `#/governance` | Governance | Sign-in / first-admin bootstrap, users and roles (SOC_ADMIN), review SLA queue, SLA and alert configuration, the published RBAC policy |
 | `#/demo` | Demo | Demo Mode (below) |
 
 The console is desktop-first; it remains usable down to ~768 px (the
@@ -376,6 +381,141 @@ demo-owned:
 If anything else holds the demo source key, reset refuses (`409`) and the
 console shows a namespace conflict. The reset counts non-demo rows before and
 after deleting and rolls back if they differ; the response reports both.
+
+## Trust, integration & governance (Phase 7)
+
+Phase 7 is an **additive** layer on top of the frozen Phase 0–6 core: new tables (migration
+`0007`), new services and routers, and one hook in ingestion that runs in the same database
+transaction as the event insert. The pipeline, normalizer, drift gates, onboarding and learning
+services are unchanged. RBAC and audit are attached to the existing governance routers as a
+router-level dependency in `app/main.py`.
+
+### Storage model
+
+| Layer | What | Where |
+|---|---|---|
+| Hot (PostgreSQL) | Event row: metadata, raw payload, SHA-256, normalized representation, **inline** extensions, field accounting, lineage | `events` (unchanged) |
+| Extension overflow | Extensions beyond `EXTENSION_INLINE_MAX_FIELDS` / `EXTENSION_INLINE_MAX_BYTES`, stored losslessly with the original key order and a SHA-256 of the canonical payload. Inline ∪ overflow = every preserved field. | `event_extension_overflow`; marker in `processing_metadata.extension_spill` |
+| Onboarding evidence | Repeated overflow key structures per adapter, with sample event ids. At `OVERFLOW_EVIDENCE_MIN_OCCURRENCES` they can start an onboarding session. | `overflow_signatures` |
+| Cold raw vault | Exact raw bytes, **content-addressed** (`sha256/aa/bb/<digest>`), atomic write and read-only after write. The vault digest must equal the event's SHA-256. A vault failure never loses the event: it records `HOT_ONLY/FAILED` and is retried and alerted. | `RawVault` interface; `FilesystemRawVault` (Docker volume `logforge_evidence`); metadata in `event_raw_storage` |
+| Merkle evidence chain | Event hashes sealed into batches (≤ `MERKLE_BATCH_MAX_EVENTS`), RFC 6962-style domain-separated tree, each batch chained to the previous one and written once to an anchor store | `evidence_batches`, `evidence_batch_members`; `AnchorStore` → `LocalWormAnchorStore` |
+
+**Provider pluggability.** Every vault object records its `backend` (in `event_raw_storage`), and
+every sealed batch records its `anchor_backend`. Recovery and verification resolve the provider
+**by that recorded name** (`raw_vault.BACKENDS`, `anchor.PROVIDERS`), so a future S3/MinIO vault or
+object-lock anchor provider can be added next to the local ones. Existing evidence keeps
+verifying against the provider it was written to. A recorded provider that this build doesn't
+have is reported as `ANCHOR_BACKEND_UNAVAILABLE` or `BACKEND_UNAVAILABLE`, never as valid. Each
+provider must pass the contract tests in `test_limitation_fixes.py`. Only
+`filesystem` / `local_worm` exist, and `AnchorStore.compliance_grade` is `false` for them.
+**No S3/MinIO or object-lock provider is implemented in Phase 7.**
+
+### Integrity verification
+
+- `GET /api/v1/integrity/events/{id}` runs three independent checks: stored SHA-256 vs the raw
+  payload, the cold copy's digest, and Merkle inclusion (the proof is returned) plus the anchor
+  match. A forgery that rewrites both `raw_event` and `raw_hash` is still caught by the sealed leaf.
+- `GET /api/v1/integrity/verify` recomputes every root from its leaves, checks each leaf against
+  its `(event_id, raw_sha256)`, chain continuity and sequence, and compares each batch with its
+  anchor. Deleted-but-sealed events (e.g. Demo reset) are counted, not treated as failures.
+- `GET /api/v1/governance/audit/verify` re-hashes the audit log. Each record's hash covers its
+  canonical content plus the previous hash, so edits, deletions and re-hashed forgeries are detected.
+
+### RBAC and maker-checker
+
+| Role | Capabilities |
+|---|---|
+| `ANALYST` | inspect, review (drift acknowledge, request review), propose (onboarding sessions/suggestions/proposals, learning proposals), export |
+| `SECURITY_ENGINEER` | + approve/reject adapters, accept drift as variant, approve/reject/activate learning, rollback, seal, vault backfill, alert sweep |
+| `SOC_ADMIN` | + governance configuration, role management, **critical approvals** (replace baseline, HIGH-risk or `confirm_supersede` learning approvals), demo reset |
+
+- Local users with PBKDF2-HMAC-SHA256 hashes (`PASSWORD_HASH_ITERATIONS`) and opaque bearer
+  tokens. Only token hashes are stored. The first SOC_ADMIN is created with
+  `POST /auth/bootstrap`, which is refused once any user exists.
+- **Maker-checker:** for onboarding approval and learning approve/activate, an authenticated user
+  who suggested, proposed or edited the object cannot approve it.
+- **Identity binding:** when a token is presented, free-text identity fields (`approved_by`,
+  `requested_by`, `by`, …) must equal the signed-in user.
+- `RBAC_MODE=permissive` (default, for development and Demo Mode) keeps anonymous calls
+  working, audited as `anonymous`. `RBAC_MODE=enforce` requires a token for every governed
+  action. User management and configuration are never anonymous.
+- **Production gate:** with `APP_ENV=production` the process refuses to start unless
+  `RBAC_MODE=enforce`. Permissive mode logs a warning at startup, and `GET /auth/status`
+  reports `production_safe`.
+- **Login throttling:** after `LOGIN_MAX_FAILURES` failed logins for a username within
+  `LOGIN_LOCKOUT_MINUTES` (counted since that user's last successful login), further attempts get
+  `429` with `Retry-After`, even with the correct password. Failures are counted from the
+  hash-chained audit log, so no extra table is needed and the counter cannot be quietly reset.
+  The trade-off: an attacker can temporarily lock a known username.
+- Every governed action is audited with actor, role, action, object, timestamp, decision
+  (`SUCCESS`/`DENIED`/`FAILED`), request evidence and the maker-checker outcome. This covers
+  onboarding, drift, learning, rollback, RBAC and configuration changes, exports, raw recovery,
+  sealing and alert acknowledgement.
+
+### Review SLA
+
+Drift events `UNDER_REVIEW`, validated onboarding sessions and open learning sessions each get
+a **durable deadline** from their severity (`SLA_HOURS_*`, overridable by SOC_ADMIN). Their
+status moves `PENDING → DUE_SOON → OVERDUE → ESCALATED` (repeated escalations are counted) and
+becomes `RESOLVED` when a human decides. Overdue and escalation raise alerts. **A timeout never
+approves, activates or rejects anything:** the known-good adapter version and baseline stay in
+force.
+
+### Confidence evidence ledger
+
+For every onboarding or learning proposal version, the ledger records the stated confidence,
+sample count, in-sample sandbox result, structural coverage and diversity, and two further
+checks:
+
+- **Holdout:** the offline analyzer is re-derived on a 75% training split and tested on the
+  held-out samples. For learning, historical structures serve as the holdout.
+- **Mutation tests:** value, reorder and injection robustness plus truncation fault detection,
+  run through the real pipeline.
+
+The human decision and production outcome are joined in live. `/confidence/calibration` tallies
+outcomes per confidence band. This is an evidence ledger, **not a statistical calibration or a
+trained model**, and it changes no gate. The offline analyzer remains the default, and live
+Claude remains optional and unverified.
+
+### Alert bus
+
+Persisted, deduplicated alerts (`OPEN`/`ACKNOWLEDGED`, read/unread, occurrence count) for:
+critical drift, overdue and escalated reviews, learning regression (a learned version with a
+materially worse partial/failed rate than its predecessor; rollback stays a human action),
+Merkle integrity failure, broken audit chain, raw vault failure, extension-overflow threshold
+and parser-failure spikes. Internal delivery is always on. Webhook, Slack, Teams and SMTP
+adapters are optional and never expose their destinations. They are tested over real sockets
+against local HTTP and SMTP servers: payload shape, HTTP errors, timeouts and unreachable hosts
+are recorded, never raised. They have **not** been verified against the hosted Slack, Teams or a
+production mail relay.
+
+### Background scheduler
+
+An in-process daemon thread (`SCHEDULER_ENABLED`, `SCHEDULER_INTERVAL_SECONDS`) runs:
+vault backfill/retry → Merkle sealing (events older than `MERKLE_SEAL_GRACE_SECONDS`) →
+SLA sweep → alert checks. A Postgres advisory lock allows only one tick at a time across
+processes.
+
+### Phase 7 API
+
+| Area | Endpoints (`/api/v1`) |
+|---|---|
+| Auth / RBAC | `GET /auth/status`, `POST /auth/bootstrap`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `GET/POST /auth/users`, `PATCH /auth/users/{username}` |
+| Governance | `GET/PUT /governance/config`, `GET /governance/reviews`, `GET /governance/audit`, `GET /governance/audit/verify`, `GET /governance/policy`, `POST /governance/scheduler/run` |
+| Integrity | `GET /integrity/status`, `POST /integrity/seal`, `GET /integrity/verify`, `GET /integrity/batches`, `GET /integrity/events/{id}`, `GET /integrity/raw/{id}`, `GET /integrity/raw/{id}/recover`, `POST /integrity/raw/backfill`, `GET /integrity/extensions/{id}`, `GET /integrity/overflow/stats`, `GET /integrity/overflow/evidence`, `POST /integrity/overflow/evidence/{id}/onboarding` |
+| Alerts | `GET /alerts`, `GET /alerts/counts`, `GET /alerts/channels`, `POST /alerts/{id}/ack`, `POST /alerts/{id}/read`, `POST /alerts/sweep` |
+| Export | `GET/POST /export/events`, `GET /export/schema`, `GET /export/logs` — contract in [docs/export-schema.md](docs/export-schema.md) |
+| Confidence | `GET /confidence/onboarding/{id}`, `GET /confidence/learning/{id}`, `GET /confidence/calibration` |
+| Views | `GET /views/trust` (read-only): overflow, hot/cold raw distribution, integrity, reviews, confidence, audit, alerts, export activity. `EventRow` gains `extension_storage` / `overflow_field_count`; lineage gains an `evidence` block. |
+
+All are documented in the OpenAPI spec at `/docs`.
+
+### Air-gap implications
+
+Everything in Phase 7 works fully offline: filesystem vault and anchors, local auth, in-process
+scheduler and internal alerts. Only the optional alert delivery adapters (and the optional
+Claude provider) make outbound calls, and only when explicitly configured. The Docker volume
+`logforge_evidence` holds the vault and anchors and must be backed up together with PostgreSQL.
 
 ## Environment variables
 
@@ -904,8 +1044,9 @@ docker compose exec frontend npm test
 docker compose exec frontend npm run build
 ```
 
-At the time of writing: **457 backend tests** and **23 frontend tests** pass,
-and the frontend production build succeeds.
+At the time of writing: **617 backend tests** (457 pre-Phase-7 + 160 Phase 7)
+and **36 frontend tests** (23 + 13 Phase 7) pass, and the frontend production
+build succeeds.
 
 - `backend/tests/unit/` — parsers, detector, normalizer, adapters, hashing, IDs,
   fingerprinting, the drift comparator, onboarding analysis / proposal schema /
@@ -926,10 +1067,20 @@ and the frontend production build succeeds.
 - `frontend/src/*.test.tsx` — every route renders; loading, error and retry
   states; explorer filters, search debounce and reset; forensics verdict,
   lineage and preserved type-mismatch values; drift decisions require an
-  explicit confirm; source detail; honest provider labels; export disabled;
+  explicit confirm; source detail; honest provider labels; export download;
   Demo Mode stops at human decisions, sends the real approval request only on
   click, reads evidence from the Views API, requires confirmation to reset,
   and runs correctly under React StrictMode.
+
+- `backend/tests/unit/phase7/`, `backend/tests/integration/phase7/`,
+  `frontend/src/phase7.test.tsx` — extension spill and zero-loss recovery,
+  byte-exact raw vault round trips and vault failure/retry, Merkle roots and
+  inclusion proofs, chain/anchor tamper detection, export filters /
+  pagination / bounded streaming / schema conformance, RBAC, identity binding
+  and maker-checker, SLA transitions and escalation, confidence ledger,
+  audit hash chain and tamper detection, alerts, the read-only trust view,
+  the production RBAC gate, login lockout, provider contract tests for the
+  vault and anchors, and alert delivery over real local HTTP/SMTP sockets.
 
 The integration suite uses its own `<db name>_test` database (created
 automatically on first run), so running it alongside a live demo never touches
@@ -938,9 +1089,14 @@ the demo's data.
 ## Current limitations
 
 **Scope and deployment**
-- **No authentication** — not in MVP scope per the PRD. Every endpoint,
-  including approvals and `POST /demo/reset` (which only ever deletes
-  demo-owned rows), is unauthenticated; `approved_by` is free text.
+- **RBAC defaults to `permissive`** — governance endpoints still accept
+  anonymous calls (audited as `anonymous`; maker-checker cannot be enforced
+  between unidentified actors). Set `RBAC_MODE=enforce` to require a signed-in
+  role. Demo Mode is designed for permissive mode: under `enforce` with a
+  single user, maker-checker blocks the demo's self-approval by design.
+  `APP_ENV=production` refuses to start without `RBAC_MODE=enforce`. Local
+  accounts only (no SSO/OAuth/FIDO2), with per-username lockout after repeated
+  failures but no per-IP rate limiting. Read-only views stay open in both modes.
 - **No production deployment profile** — the compose file runs development
   servers (`uvicorn --reload`, Vite dev server).
 - **Synchronous ingestion** — each log is processed and committed within its
@@ -948,9 +1104,23 @@ the demo's data.
   loses nothing). There is a single API process and a single Postgres
   instance, with no queue or worker tier. No throughput benchmark has been
   published; **billion-events/day is a design target, not a measured result**.
-- **Export backend not implemented** — the console's Export page shows the
-  selection and the real matching count, but the download is disabled.
-- **No SIEM forwarding and no data-lake integration.**
+- **Raw payloads stay in PostgreSQL** — the cold vault is a write-through,
+  verified copy. Evicting hot raw payloads would change frozen Phase 3/5/6
+  readers of `events.raw_event` (lineage, learning evidence, onboarding from
+  events, reprocess, search), so it is not done; no storage saving is claimed.
+- **Anchors are local files** (O_EXCL, read-only) — WORM-*style*, not a
+  compliance-grade immutable store; an administrator with filesystem access can
+  still delete them (verification then reports `ANCHOR_MISSING`). The provider
+  abstraction is ready for an object-lock provider, but none is implemented.
+- **Measured Phase 7 overhead** (Docker Desktop, one API process, 200 events each
+  with the vault on and off, interleaved): the per-event vault write (about 3–6 ms
+  in isolation, including `fsync`) is lost in the ingest variance. The means were
+  13.1 vs 13.2 ms and the p95s 28 vs 28 ms. The confidence ledger adds about
+  15–60 ms per *human-initiated* suggestion or proposal, never per event. Sealing
+  about 1,200 events takes about 60–100 ms. These are local measurements, not a
+  throughput benchmark.
+- **No SIEM forwarding and no data-lake integration.** The published
+  `logforge.export.v1` contract is the integration boundary.
 - **LEEF and XML are not supported.**
 - **Live Claude inference has not been verified** — no API key was available.
   The Claude suggestion provider and learning assistant are covered by mocked
@@ -1041,19 +1211,25 @@ the demo's data.
   approval and activation, versioning and rollback.
 - Read-only operational intelligence API (`/api/v1/views`).
 - React operational console (Overview, Event Explorer, Event Forensics,
-  Sources, Drift Queue, Onboarding, Adapter Evolution, Learning, Export UI
-  foundation, Demo).
+  Sources, Drift Queue, Onboarding, Adapter Evolution, Learning, Export,
+  Integrity, Alerts, Audit Log, Governance, Demo).
 - Reproducible Demo Mode (CLI and console) with an ownership-verified reset.
 - Docker Compose development environment with automatic migrations.
 
+- Phase 7 trust / integration / governance layer (see below): extension
+  spill, cold raw vault, Merkle evidence chain with local anchors, streaming
+  export with the published `logforge.export.v1` schema, RBAC + maker-checker,
+  review SLA with escalation, confidence evidence ledger, hash-chained audit,
+  internal alert bus with optional delivery adapters, background scheduler.
+
 **DEFERRED (planned, not implemented)**
-- Export backend (NDJSON / OCSF-aligned NDJSON) behind the existing Export page.
 - LEEF and XML parsers.
-- A published output event schema for downstream consumers.
+- S3/MinIO raw-vault backend, external WORM/object-lock anchoring, and a
+  hot-raw eviction policy (needs a raw resolver in the frozen core readers).
 - A production deployment profile.
 - A measured throughput baseline and scaling documentation.
 - Live verification of the Claude provider.
-- Authentication and role-based approval; PII tokenization for external
+- SSO/OAuth/FIDO2; PII tokenization for external
   destinations (the PRD's standard flow includes a tokenization step; out of
   scope until a later phase).
 - Deduplication, regex / multi-line onboarding, nested-field drift.

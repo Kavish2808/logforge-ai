@@ -221,12 +221,26 @@ describe("onboarding", () => {
 });
 
 describe("export", () => {
-  it("shows the real matching count and a disabled download", async () => {
+  // Phase 7 replaced the placeholder (previously: "Export is not available yet" + a disabled button)
+  // with the real streaming export backend.
+  it("shows the real matching count and downloads through the export API", async () => {
     routes["/views/events"] = () => page([row()], { total: 42 });
+    routes["/export/schema"] = () => ({ schema_version: "logforge.export.v1", semantics: { completeness: "trailer line" } });
+    routes["/export/logs"] = () => ({ items: [] });
+    routes["/export/events"] = () => new Response(
+      '{"record_type":"event","event_id":"E1"}\n{"record_type":"trailer","count":1,"has_more":false,"next_cursor":null,"complete":true}\n',
+      { status: 200, headers: { "Content-Type": "application/x-ndjson", "Content-Disposition": 'attachment; filename="x.ndjson"' } });
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});  // jsdom cannot navigate to blob: URLs
     go("#/export");
     expect(await screen.findByText("42")).toBeTruthy();
-    expect(screen.getByText(/Export is not available yet/)).toBeTruthy();
-    const button = screen.getByRole("button", { name: /download/i });
-    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByText(/Export is not available yet/)).toBeNull();
+    const button = screen.getByRole("button", { name: /^download$/i });
+    expect(button.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(button);
+    expect(await screen.findByText(/Exported 1 event/)).toBeTruthy();
+    const call = calls.find((c) => c.url.pathname.endsWith("/export/events"))!;
+    expect(call.url.searchParams.get("output")).toBe("ndjson");
   });
 });

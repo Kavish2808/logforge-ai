@@ -11,6 +11,12 @@ const STATUS_CLASS: Record<string, string> = {
   ACTIVE: "b-ok", APPROVED: "b-info", VALIDATED: "b-info", PROPOSED: "b-review", ROLLED_BACK: "b-neutral",
   SUPERSEDED: "b-neutral", NO_CHANGE_REQUIRED: "b-neutral", COLLECTED: "b-neutral", SUGGESTION_FAILED: "b-fail",
   OK: "b-ok", WARN: "b-warn", FAIL: "b-fail", SKIPPED: "b-neutral",
+  // Phase 7
+  PENDING: "b-info", DUE_SOON: "b-warn", OVERDUE: "b-fail", ESCALATED: "b-fail", RESOLVED: "b-neutral",
+  INLINE: "b-ok", SPILLED: "b-warn", STORED: "b-ok", HOT_AND_COLD: "b-ok", HOT_ONLY: "b-warn",
+  VERIFIED: "b-ok", HASH_VALID_UNSEALED: "b-info", INTEGRITY_FAILURE: "b-fail", EVENT_DELETED: "b-neutral",
+  OPEN: "b-fail", ACKNOWLEDGED: "b-neutral", DENIED: "b-fail", INFO: "b-info", COMPLETED: "b-ok", STARTED: "b-info",
+  ANALYST: "b-info", SECURITY_ENGINEER: "b-review", SOC_ADMIN: "b-warn",
 };
 
 export function Badge({ value, title }: { value: string | null | undefined; title?: string }) {

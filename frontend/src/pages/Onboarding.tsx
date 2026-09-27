@@ -5,8 +5,10 @@ import {
   approveOnboarding, createOnboarding, getEvents, getOnboarding, listOnboarding, rejectOnboarding, suggestOnboarding,
 } from "../api/endpoints";
 import type { OnboardingSession } from "../api/types";
+import { ActingAs, ConfidenceCard, SlaPanel } from "../components/trust";
 import { Badge, Card, KV, Load, Pipeline, Stat } from "../components/ui";
 import { fmtTime, providerLabel } from "../lib/format";
+import { useAuth } from "../lib/auth";
 import { Link, navigate } from "../lib/router";
 import { errorMessage, useApi } from "../lib/useApi";
 
@@ -130,6 +132,8 @@ function Detail({ id }: { id: string }) {
   const [override, setOverride] = useState<OnboardingSession | null>(null);
   const [provider, setProvider] = useState("offline");
   const [by, setBy] = useState("");
+  const { user } = useAuth();
+  const who = user ? user.username : by;  // bound to the signed-in identity (Phase 7 RBAC)
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: string; text: string } | null>(null);
@@ -257,17 +261,18 @@ function Detail({ id }: { id: string }) {
                 {open ? (
                   <div className="boundary">
                     <div className="spread"><strong>Human decision required</strong><span className="small muted">No adapter is active until you approve.</span></div>
+                    <ActingAs />
                     <div className="row" style={{ margin: "10px 0" }}>
-                      <input aria-label="Reviewer" placeholder="Reviewer (free text)" value={by} onChange={(e) => setBy(e.target.value)} />
+                      <input aria-label="Reviewer" placeholder="Reviewer (free text)" value={who} disabled={!!user} title={user ? "Bound to your signed-in identity" : undefined} onChange={(e) => setBy(e.target.value)} />
                       <input aria-label="Note or reason" placeholder="Note / rejection reason" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: 1 }} />
                     </div>
                     <div className="row">
                       <button className="primary" disabled={busy || !s.activation.eligible_for_approval}
-                        onClick={() => act("Approved", async () => (await approveOnboarding(s.id, { proposal_version: s.proposal_version, approved_by: by || null, note: note || null })).session)}>
+                        onClick={() => act("Approved", async () => (await approveOnboarding(s.id, { proposal_version: s.proposal_version, approved_by: who || null, note: note || null })).session)}>
                         Approve &amp; activate proposal v{s.proposal_version}
                       </button>
                       <button className="danger" disabled={busy || !note.trim()}
-                        onClick={() => act("Rejected", () => rejectOnboarding(s.id, { reason: note.trim(), rejected_by: by || null }))}>Reject</button>
+                        onClick={() => act("Rejected", () => rejectOnboarding(s.id, { reason: note.trim(), rejected_by: who || null }))}>Reject</button>
                       {!s.activation.eligible_for_approval && <span className="small muted">Approval needs a proposal that PASSED validation.</span>}
                       {!note.trim() && <span className="small faint">Rejecting requires a reason.</span>}
                     </div>
@@ -283,6 +288,9 @@ function Detail({ id }: { id: string }) {
                 )}
                 {msg && <div className={`notice ${msg.kind}`} role="status" style={{ marginTop: 10 }}>{msg.text}</div>}
               </Card>
+
+              {open && s.status === "VALIDATED" && <SlaPanel itemType="ONBOARDING_SESSION" itemId={s.id} />}
+              {s.proposal_version > 0 && <ConfidenceCard kind="onboarding" id={s.id} version={s.proposal_version} />}
 
               <Card title="7 · Activation">
                 <div className="row">

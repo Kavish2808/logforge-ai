@@ -17,3 +17,6 @@ frontend/.vite/
 *.log
 
 *.tsbuildinfo
+
+# Phase 7 local evidence storage (raw vault / anchors) when run outside Docker
+backend/data/

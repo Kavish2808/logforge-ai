@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { acceptDrift, getBaseline, getEvent, getEvents, proposeLearning } from "../api/endpoints";
 import type { DriftRecord, EventRow } from "../api/types";
+import { ActingAs, SlaPanel } from "../components/trust";
 import { Badge, Card, KV, Load, Pipeline } from "../components/ui";
 import { fmtTime } from "../lib/format";
 import { Link, navigate } from "../lib/router";
@@ -120,9 +121,11 @@ function DriftDetail({ row, onDecided }: { row: EventRow; onDecided: () => void 
 
             {message && <div className={`notice ${message.kind}`} role="status">{message.text}</div>}
 
+            {underReview && <SlaPanel itemType="DRIFT_EVENT" itemId={row.event_id} />}
             {underReview ? (
               <div className="boundary">
                 <div className="spread"><strong>Human decision required</strong><span className="small muted">Nothing changes until you confirm.</span></div>
+                <ActingAs />
                 <p className="small muted" style={{ margin: "6px 0 10px" }}>
                   Accepting only updates the Phase 5 baseline. Changing how logs are parsed requires a separate, explicitly approved learning proposal.
                 </p>

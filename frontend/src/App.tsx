@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
-import { getHealth, getSummary } from "./api/endpoints";
+import { getAlertCounts, getHealth, getSummary } from "./api/endpoints";
+import { Quiet } from "./components/trust";
+import { useAuth } from "./lib/auth";
 import { useApi } from "./lib/useApi";
 import { href, useRoute } from "./lib/router";
 import { AdapterEvolution } from "./pages/AdapterEvolution";
+import { AlertsPage } from "./pages/Alerts";
+import { AuditPage } from "./pages/Audit";
 import { Demo } from "./pages/Demo";
 import { DriftQueue } from "./pages/DriftQueue";
 import { EventExplorer } from "./pages/EventExplorer";
 import { EventForensics } from "./pages/EventForensics";
 import { ExportPage } from "./pages/Export";
+import { GovernancePage } from "./pages/Governance";
+import { IntegrityPage } from "./pages/Integrity";
 import { Learning } from "./pages/Learning";
 import { Onboarding } from "./pages/Onboarding";
 import { Overview } from "./pages/Overview";
@@ -16,6 +22,7 @@ import { Sources } from "./pages/Sources";
 const NAV: { group: string; items: { id: string; label: string }[] }[] = [
   { group: "Operate", items: [{ id: "overview", label: "Overview" }, { id: "events", label: "Event Explorer" }, { id: "sources", label: "Sources" }] },
   { group: "Adapt", items: [{ id: "drift", label: "Drift Queue" }, { id: "onboarding", label: "Onboarding" }, { id: "evolution", label: "Adapter Evolution" }, { id: "learning", label: "Learning" }] },
+  { group: "Trust", items: [{ id: "integrity", label: "Integrity" }, { id: "alerts", label: "Alerts" }, { id: "audit", label: "Audit Log" }, { id: "governance", label: "Governance" }] },
   { group: "Integrate", items: [{ id: "export", label: "Export" }] },
   { group: "Showcase", items: [{ id: "demo", label: "Demo" }] },
 ];
@@ -32,6 +39,20 @@ function HealthIndicator() {
     <div className="nav-footer" aria-live="polite">
       <span className={`dot ${health.loading && !health.data ? "" : ok ? "ok" : "fail"}`} aria-hidden="true" />
       {health.loading && !health.data ? "Checking API…" : ok ? "API + database healthy" : "API unreachable"}
+    </div>
+  );
+}
+
+function UnreadAlerts() {
+  const s = useApi((sig) => getAlertCounts(sig), []);
+  return <Quiet state={s}>{(c) => c.unread ? <span className="badge b-fail" aria-label={`${c.unread} unread alerts`}>{c.unread}</span> : null}</Quiet>;
+}
+
+function Identity() {
+  const { user } = useAuth();
+  return (
+    <div className="nav-footer small">
+      {user ? <>Signed in: <strong>{user.username}</strong> · {user.role.replace(/_/g, " ")}</> : <a href={href("governance")}>Sign in (governance)</a>}
     </div>
   );
 }
@@ -55,6 +76,10 @@ export default function App() {
       case "evolution": return <AdapterEvolution sourceKey={route.param} />;
       case "learning": return <Learning sessionId={route.param} />;
       case "export": return <ExportPage />;
+      case "integrity": return <IntegrityPage />;
+      case "alerts": return <AlertsPage />;
+      case "audit": return <AuditPage />;
+      case "governance": return <GovernancePage />;
       case "demo": return <Demo />;
       default: return <Overview />;
     }
@@ -78,10 +103,12 @@ export default function App() {
                 aria-current={activeNav === item.id ? "page" : undefined}>
                 {item.label}
                 {item.id === "drift" && <PendingCount />}
+                {item.id === "alerts" && <UnreadAlerts />}
               </a>
             ))}
           </div>
         ))}
+        <Identity />
         <HealthIndicator />
       </nav>
       <main className="main" id="main">{page}</main>

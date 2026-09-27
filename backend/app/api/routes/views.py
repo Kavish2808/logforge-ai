@@ -12,7 +12,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.repository import views_repo as repo
-from app.schema.views import EventPage, FilterValues, Lineage, SourceDetail, SourceList, Summary, Timeline
+from app.schema.views import (
+    EventPage,
+    FilterValues,
+    Lineage,
+    SourceDetail,
+    SourceList,
+    Summary,
+    Timeline,
+    TrustSummary,
+)
 from app.services import views_service as svc
 
 router = APIRouter(prefix="/views", tags=["views"])
@@ -109,3 +118,10 @@ def source_timeline(source_key: str, db: Session = Depends(get_readonly_db)) -> 
         return Timeline(**svc.timeline(db, source_key))
     except svc.ViewsNotFound as exc:
         raise HTTPException(status_code=404, detail=exc.message) from exc
+
+
+@router.get("/trust", response_model=TrustSummary)
+def trust(db: Session = Depends(get_readonly_db)) -> TrustSummary:
+    """Phase 7: extension overflow, hot/cold raw distribution, integrity chain,
+    review SLAs, confidence ledger, audit, alerts and export activity."""
+    return TrustSummary(**svc.trust_summary(db))

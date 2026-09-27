@@ -144,6 +144,10 @@ class ProcessingMetadata(BaseModel):
     duration_ms: float | None = None
     adapter_source: str | None = None  # "manual" (shipped YAML) | "onboarded" (human-approved onboarding)
     drift: DriftMetadata | None = None
+    # Phase 7 (additive): present only when extensions exceeded the inline
+    # budget; `extensions` then holds the inline part and the rest is stored
+    # losslessly in extension overflow storage (GET /integrity/extensions/{id}).
+    extension_spill: dict[str, Any] | None = None
 
 
 class StructuralFingerprint(BaseModel):

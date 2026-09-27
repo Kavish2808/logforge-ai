@@ -12,9 +12,20 @@ without this isolation, the same database) as a stack a developer may
 already have running with real demo data in it — running the suite must
 never be able to wipe that.
 """
+import os
+import tempfile
 from pathlib import Path
 
-import pytest
+# Phase 7: the suite never runs the background scheduler, never writes to the
+# live raw vault / anchor store, and uses a fast (test-only) password hash cost.
+_P7_TMP = tempfile.mkdtemp(prefix="logforge-p7-")
+os.environ["SCHEDULER_ENABLED"] = "false"
+os.environ["RAW_VAULT_PATH"] = os.path.join(_P7_TMP, "raw_vault")
+os.environ["EVIDENCE_ANCHOR_PATH"] = os.path.join(_P7_TMP, "anchors")
+os.environ["PASSWORD_HASH_ITERATIONS"] = "1000"
+os.environ["RBAC_MODE"] = "permissive"
+
+import pytest  # noqa: E402
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -84,6 +95,11 @@ def db_session():
         session.execute(text("DELETE FROM learning_sessions"))
         session.execute(text("DELETE FROM onboarded_adapters"))
         session.execute(text("DELETE FROM onboarding_sessions"))
+        # Phase 7 tables (event-scoped overflow/raw-storage rows cascade with events).
+        for table in ("evidence_batch_members", "evidence_batches", "overflow_signatures", "audit_log",
+                      "review_slas", "governance_settings", "confidence_ledger", "alerts", "export_log",
+                      "auth_tokens", "users"):
+            session.execute(text(f"DELETE FROM {table}"))
         session.commit()
         session.close()
 

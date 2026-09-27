@@ -33,7 +33,8 @@ export function EventTable({ rows, compact }: { rows: EventRow[]; compact?: bool
                 </>
               )}
               <td><Badge value={r.drift_status} />{r.drift_severity && <> <Badge value={r.drift_severity} /></>}</td>
-              <td>{r.warning_count ? <span className="badge b-warn">{r.warning_count}</span> : <span className="faint">0</span>}</td>
+              <td>{r.warning_count ? <span className="badge b-warn">{r.warning_count}</span> : <span className="faint">0</span>}
+                {r.extension_storage === "SPILLED" && <div><span className="badge b-warn" title={`${r.overflow_field_count ?? 0} extension field(s) in overflow storage`}>SPILLED</span></div>}</td>
               {!compact && <td className="mono small nowrap" title={r.raw_hash}>{shortHash(r.raw_hash)}</td>}
             </tr>
           ))}

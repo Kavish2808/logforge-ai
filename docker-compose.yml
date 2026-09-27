@@ -26,10 +26,14 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-logforge}:${POSTGRES_PASSWORD:-logforge}@db:5432/${POSTGRES_DB:-logforge}
+      # Phase 7 evidence storage lives on a named volume, never in the bind-mounted source tree.
+      RAW_VAULT_PATH: /var/lib/logforge/raw_vault
+      EVIDENCE_ANCHOR_PATH: /var/lib/logforge/evidence_anchors
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - logforge_evidence:/var/lib/logforge
     depends_on:
       db:
         condition: service_healthy
@@ -62,3 +66,4 @@ services:
 
 volumes:
   logforge_pgdata:
+  logforge_evidence:

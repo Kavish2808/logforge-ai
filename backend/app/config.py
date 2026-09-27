@@ -1,7 +1,7 @@
 """Application configuration, loaded from environment variables / .env."""
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,6 +45,74 @@ class Settings(BaseSettings):
     drift_critical_fields: str = (
         "event_action,severity,network.src_ip,network.dst_ip,network.src_port,network.dst_port"
     )
+
+    # ---- Phase 7: trust / integration / governance layer (all additive) ----
+    # Adaptive extension spill: extensions larger than this inline budget are
+    # split; the overflow is stored losslessly in event_extension_overflow.
+    extension_inline_max_bytes: int = Field(default=8192, ge=256, le=1_048_576)
+    extension_inline_max_fields: int = Field(default=64, ge=1, le=10_000)
+    # Repeated overflow of the same key structure becomes onboarding evidence.
+    overflow_evidence_min_occurrences: int = Field(default=3, ge=1, le=100_000)
+
+    # Cold raw vault (write-through, content-addressed). "filesystem" only in Phase 7.
+    raw_vault_enabled: bool = True
+    raw_vault_backend: str = "filesystem"
+    raw_vault_path: str = "./data/raw_vault"
+    # Anchor provider for sealed Merkle roots. Only "local_worm" exists in Phase 7.
+    evidence_anchor_backend: str = "local_worm"
+
+    # Merkle evidence chain + local WORM-style anchor store.
+    evidence_anchor_path: str = "./data/evidence_anchors"
+    merkle_batch_max_events: int = Field(default=10_000, ge=1, le=1_000_000)
+    # Only events received at least this long ago are sealed by the scheduler.
+    merkle_seal_grace_seconds: int = Field(default=60, ge=0, le=86_400)
+
+    # RBAC: "permissive" = anonymous calls allowed (audited as anonymous), any
+    # presented token fully enforced; "enforce" = governance actions require a token.
+    rbac_mode: str = Field(default="permissive", pattern="^(permissive|enforce)$")
+    auth_token_ttl_minutes: int = Field(default=720, ge=5, le=10_080)
+    # Failed-login throttling (counted from the tamper-evident audit log).
+    login_max_failures: int = Field(default=5, ge=1, le=100)
+    login_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+    password_hash_iterations: int = Field(default=390_000, ge=1_000, le=5_000_000)
+
+    # Review SLA (hours) by severity; runtime-overridable by SOC_ADMIN.
+    sla_hours_critical: float = Field(default=4, gt=0, le=8760)
+    sla_hours_high: float = Field(default=24, gt=0, le=8760)
+    sla_hours_medium: float = Field(default=72, gt=0, le=8760)
+    sla_hours_low: float = Field(default=168, gt=0, le=8760)
+
+    # Export bounds.
+    export_max_events: int = Field(default=50_000, ge=1, le=1_000_000)
+    export_json_max_events: int = Field(default=5_000, ge=1, le=100_000)
+    export_batch_size: int = Field(default=500, ge=10, le=5_000)
+
+    # Background scheduler (seal, SLA sweep, alert sweep, vault backfill).
+    scheduler_enabled: bool = True
+    scheduler_interval_seconds: int = Field(default=60, ge=5, le=86_400)
+
+    # Alert delivery adapters: all optional, disabled unless configured.
+    alert_webhook_url: str = ""
+    alert_slack_webhook_url: str = ""
+    alert_teams_webhook_url: str = ""
+    alert_smtp_host: str = ""
+    alert_smtp_port: int = Field(default=25, ge=1, le=65535)
+    alert_email_from: str = ""
+    alert_email_to: str = ""
+    alert_delivery_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.strip().lower() in ("production", "prod")
+
+    @model_validator(mode="after")
+    def _production_requires_enforced_rbac(self) -> "Settings":
+        # Phase 7 production gate: permissive RBAC (anonymous, audited governance
+        # actions) is for development and Demo Mode only. A production process
+        # refuses to start rather than silently accept unauthenticated approvals.
+        if self.is_production and self.rbac_mode != "enforce":
+            raise ValueError("APP_ENV=production requires RBAC_MODE=enforce (permissive mode is for development/demo only)")
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:

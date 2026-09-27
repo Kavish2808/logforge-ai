@@ -23,6 +23,9 @@ export interface EventRow {
   warning_count: number;
   preserved_field_count: number;
   raw_hash: string;
+  // Phase 7 (optional: absent from older API responses)
+  extension_storage?: string;
+  overflow_field_count?: number;
 }
 
 export interface EventPage {
@@ -98,6 +101,13 @@ export interface Lineage {
   };
   nothing_silently_discarded: boolean;
   basis: string[];
+  evidence?: LineageEvidence | null;
+}
+
+export interface LineageEvidence {
+  extension_storage: { mode: string; inline_field_count: number; overflow_field_count: number; overflow_bytes: number; overflow_sha256: string | null };
+  raw_storage: RawStorage | null;
+  merkle: { batch_id: string; batch_seq: number; leaf_index: number; leaf_hash: string; root_hash: string; chain_hash: string } | null;
 }
 
 export interface SourceSummary {
@@ -344,3 +354,119 @@ export interface DemoReset {
   deleted: Record<string, number>;
   non_demo_rows: { before: Record<string, number>; after: Record<string, number>; unchanged: boolean };
 }
+
+// --- Phase 7: trust / governance / integration ---------------------------------------------
+
+export interface RawStorage {
+  tier: string; status: string; backend: string; object_key: string | null; sha256: string; byte_size: number;
+  encoding: string; error: string | null; attempts: number; stored_at: string | null; verified_at: string | null;
+}
+
+export interface Me { username: string; role: string | null; authenticated: boolean; capabilities: string[]; rbac_mode: string }
+export interface AuthStatus { rbac_mode: string; bootstrap_required: boolean; roles: string[]; capabilities: Record<string, string[]>; app_env?: string; production_safe?: boolean }
+export interface User { id: string; username: string; role: string; active: boolean; capabilities: string[]; created_by: string | null; created_at: string }
+export interface LoginResult { access_token: string; expires_at: string; user: User }
+
+export interface ReviewSla {
+  item_type: string; item_id: string; source_key: string | null; severity: string; opened_at: string; due_at: string;
+  sla_hours: number; status: string; review_age_seconds: number; seconds_to_deadline: number; escalation_count: number;
+  last_escalated_at: string | null; resolved_at: string | null; resolution: string | null; next_action: string | null; fallback: string | null;
+}
+export interface Reviews { items: ReviewSla[]; stats: { by_status: Record<string, number>; open_by_type: Record<string, number>; open: number }; policy: Dict }
+
+export interface AuditRecord {
+  seq: number; audit_id: string; actor: string; role: string | null; authenticated: boolean; action: string; object_type: string;
+  object_id: string | null; decision: string; timestamp: string; details: Dict; evidence_ref: string | null;
+  previous_hash: string; current_hash: string;
+}
+export interface AuditPage { items: AuditRecord[]; stats: { total: number; by_decision: Record<string, number>; head: { seq: number; hash: string; at: string } | null }; next_before_seq: number | null }
+export interface ChainProblem { seq: number | string; problem: string; detail?: string; [k: string]: unknown }
+export interface AuditVerify { valid: boolean; records_checked: number; head_hash: string | null; first_break_seq: number | null; problems: ChainProblem[]; verified_at: string }
+
+export interface Alert {
+  id: string; kind: string; severity: string; title: string; message: string; object_type: string | null; object_id: string | null;
+  details: Dict; status: string; read: boolean; occurrences: number; deliveries: { channel: string; ok: boolean; at: string; error?: string }[];
+  acknowledged_by: string | null; acknowledged_at: string | null; created_at: string; last_seen_at: string;
+}
+export interface AlertCounts { by_status: Record<string, number>; unread: number; open_by_severity: Record<string, number>; open_by_kind: Record<string, number> }
+export interface AlertPage { total: number; items: Alert[]; counts: AlertCounts }
+
+export interface TrustSummary {
+  extension_overflow: {
+    events_total: number; events_spilled: number; events_inline: number; overflow_field_count: number; overflow_bytes: number;
+    evidence_signatures: number; budget: { max_bytes: number; max_fields: number };
+    by_adapter: Record<string, { events: number; fields: number; bytes: number }>; note: string;
+  };
+  raw_vault: {
+    enabled: boolean; backend: Dict; events_total: number; hot: number; cold_stored: number; cold_bytes: number; cold_failed: number;
+    not_yet_archived: number; by_tier_status: Record<string, number>;
+  };
+  integrity: {
+    batches: number; events_sealed: number; events_unsealed: number;
+    head: { seq: number; batch_id: string; root_hash: string; chain_hash: string; event_count: number; end_time: string; anchored_at: string | null } | null;
+  };
+  reviews: { by_status: Record<string, number>; open_by_type: Record<string, number>; open: number };
+  confidence: { ledger_entries: Record<string, number>; total: number };
+  audit: { total: number; by_decision: Record<string, number>; head: { seq: number; hash: string; at: string } | null };
+  alerts: AlertCounts;
+  exports: { exports: number; by_status: Record<string, number>; rows_exported: number; last_export_at: string | null };
+}
+
+export interface ChainVerify {
+  valid: boolean; batches_checked: number; events_sealed: number; problems: ChainProblem[];
+  sealed_events_since_deleted: number | null; anchor_store: Dict; verified_at: string; head: Dict | null;
+}
+export interface EventVerify {
+  event_id: string; event_present: boolean; valid: boolean; status: string;
+  hash?: { stored: string; recomputed: string; valid: boolean };
+  cold_copy?: { object_key: string | null; valid: boolean | null; status?: string };
+  merkle: {
+    sealed: boolean; batch_id?: string; batch_seq?: number; leaf_index?: number; root_hash?: string; inclusion_valid?: boolean;
+    anchor_valid?: boolean; leaf_matches_event?: boolean | null; proof?: { side: string; hash: string }[];
+  };
+}
+export interface Batch {
+  seq: number; batch_id: string; root_hash: string; prev_chain_hash: string; chain_hash: string; event_count: number;
+  start_time: string; end_time: string; anchored_at: string | null;
+}
+export interface OverflowSignature {
+  id: number; adapter_id: string; key_signature: string; keys: string[]; key_count: number; occurrences: number; sample_event_ids: string[];
+  first_seen: string; last_seen: string; onboarding_session_id: string | null; onboarding_evidence: boolean; recommended_action: string;
+}
+export interface ExtensionView {
+  event_id: string; mode: string; inline_field_count: number; overflow_field_count: number; overflow_bytes: number;
+  overflow_sha256: string | null; overflow_integrity_verified: boolean | null; total_field_count: number; extensions: Dict;
+}
+export interface RawRecovery {
+  event_id: string; recovered: boolean; reason?: string; byte_size?: number; sha256?: string; matches_event_hash?: boolean; matches_hot_copy?: boolean;
+}
+
+export interface MutationOperator { kind: string; applicable: boolean; match_rate?: number; detection_rate?: number; mutants?: number }
+export interface ConfidenceEntry {
+  id: number; subject_type: string; subject_id: string; proposal_version: number; proposal_source: string | null;
+  suggestion_confidence: number | null; sample_count: number; created_at: string;
+  evidence: {
+    suggestion?: Dict;
+    in_sample?: { result?: string; match_rate?: number; failed_samples?: number };
+    structural?: { fields_observed?: number; fields_mapped?: number; fields_preserved?: number | null; structural_coverage?: number | null; structure_variants?: number };
+    holdout?: {
+      evaluated?: boolean; reason?: string; kind?: string; split?: { train: number; holdout: number };
+      rederived_offline?: { result?: string; holdout?: { match_rate: number; matched_samples: number; total_samples: number } };
+      historical?: { match_rate: number; total_samples: number } | null; regressions?: number;
+    };
+    mutation?: {
+      evaluated?: boolean; reason?: string; robustness_survival_rate?: number | null; fault_detection_rate?: number | null;
+      operators?: Record<string, MutationOperator>;
+    };
+    failed_parses?: Dict;
+  };
+  human_decision: { action: string; by: string | null; at: string } | null;
+  production_outcome: { events: number; by_status: Record<string, number>; success_rate: number | null; measurable: boolean; version: number } | null;
+}
+
+export interface GovConfig { review_sla: Dict & { hours: Record<string, number> }; alert_thresholds: Record<string, number>; static: Dict }
+export interface ExportLog {
+  id: string; actor: string; role: string | null; format: string; filters: Dict; max_events: number; include_raw: boolean;
+  status: string; rows: number; has_more: boolean | null; started_at: string; completed_at: string | null;
+}
+export interface PolicyRule { method: string; path: string; action: string; object_type: string; critical: boolean; maker_checker_actions: string[] }

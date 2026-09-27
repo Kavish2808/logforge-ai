@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { getEvents, getSources, getSummary, listLearning } from "../api/endpoints";
+import { getEvents, getSources, getSummary, getTrust, listLearning } from "../api/endpoints";
 import { EventTable } from "../components/EventTable";
+import { Quiet } from "../components/trust";
 import { Badge, Bars, Card, Load, Stat, STATUS_COLORS, TrendChart } from "../components/ui";
 import { fmtAgo, fmtTime, num, pct, sum } from "../lib/format";
 import { Link } from "../lib/router";
@@ -13,6 +14,7 @@ export function Overview() {
   const queue = useApi((s) => getEvents({ status: "UNDER_REVIEW", limit: 5 }, s), []);
   const sources = useApi((s) => getSources(s), []);
   const learning = useApi((s) => listLearning({ limit: 5 }, s), []);
+  const trust = useApi((s) => getTrust(s), []);
 
   return (
     <>
@@ -100,6 +102,23 @@ export function Overview() {
           </Load>
         </Card>
       </div>
+
+      <Quiet state={trust}>
+        {(t) => (
+          <Card title="Trust & governance" actions={<Link to="integrity">Integrity →</Link>}>
+            <div className="stats">
+              <Stat label="Sealed (Merkle)" value={num(t.integrity.events_sealed)} hint={`${num(t.integrity.events_unsealed)} awaiting seal`} />
+              <Stat label="Raw hot / cold" value={`${num(t.raw_vault.hot)} / ${num(t.raw_vault.cold_stored)}`} hint={`${num(t.raw_vault.cold_failed)} vault failure(s)`} />
+              <Stat label="Spilled extensions" value={num(t.extension_overflow.events_spilled)} hint={`${num(t.extension_overflow.overflow_field_count)} fields in overflow`} />
+              <Stat label="Open reviews" value={num(t.reviews.open)} hint={`${num((t.reviews.by_status.OVERDUE ?? 0) + (t.reviews.by_status.ESCALATED ?? 0))} overdue/escalated`} />
+              <Stat label="Open alerts" value={num(t.alerts.by_status.OPEN ?? 0)} hint={`${num(t.alerts.unread)} unread`} />
+              <Stat label="Audit records" value={num(t.audit.total)} hint={t.audit.head ? `head #${t.audit.head.seq}` : "none yet"} />
+              <Stat label="Confidence ledger" value={num(t.confidence.total)} hint="suggestions with evidence" />
+              <Stat label="Exports" value={num(t.exports.exports)} hint={`${num(t.exports.rows_exported)} rows`} />
+            </div>
+          </Card>
+        )}
+      </Quiet>
 
       <div className="grid g-main" style={{ marginTop: 16 }}>
         <Card title="Recent events" actions={<Link to="events">Explore →</Link>}>
