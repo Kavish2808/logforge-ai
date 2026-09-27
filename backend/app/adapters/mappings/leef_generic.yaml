@@ -1,0 +1,35 @@
+# Phase 8: fallback mapping for native LEEF 1.0/2.0 (bare, i.e. not syslog-
+# wrapped, and not claimed by any human-approved onboarded adapter).
+# Only attribute keys defined by the LEEF specification itself are mapped
+# (src, dst, srcPort, dstPort, proto, usrName, sev); no vendor semantics are
+# assumed. Every other attribute is preserved in extensions.
+id: leef_generic
+vendor: Generic
+product: LEEF
+format: leef
+version: "1"
+description: "Fallback mapping for native LEEF sources without a vendor-specific or onboarded adapter."
+
+ocsf:
+  class_uid: 4001
+  class_name: "Network Activity"
+  category_uid: 4
+  category_name: "Network Activity"
+
+event_action_field: event_id
+
+# LEEF 'sev' is a vendor-scaled 1-10 value; it is kept as reported (no mapping
+# to a qualitative label is assumed).
+severity_field: sev
+
+product_version_field: device_version
+
+field_map:
+  src: { target: "network.src_ip" }
+  dst: { target: "network.dst_ip" }
+  srcPort: { target: "network.src_port", type: "int" }
+  dstPort: { target: "network.dst_port", type: "int" }
+  proto: { target: "network.protocol" }
+  usrName: { target: "user.name" }
+  device_vendor: { target: "device_vendor" }
+  device_product: { target: "device_product" }

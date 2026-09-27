@@ -1,0 +1,19 @@
+# Phase 8: fallback mapping for native, hardened-parsed XML (bare, i.e. not
+# syslog-wrapped, and not claimed by any human-approved onboarded adapter).
+# XML has no standard log vocabulary, so NO field is mapped and no vendor
+# schema is assumed: every flattened element/attribute path is preserved in
+# extensions, and the OCSF class is the uncategorized Base Event.
+id: xml_generic
+vendor: Generic
+product: XML
+format: xml
+version: "1"
+description: "Fallback mapping for native XML sources without a vendor-specific or onboarded adapter."
+
+ocsf:
+  class_uid: 0
+  class_name: "Base Event"
+  category_uid: 0
+  category_name: "Uncategorized"
+
+field_map: {}

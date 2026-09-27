@@ -19,3 +19,14 @@ from app.db.models.governance import (  # noqa: F401
     ReviewSla,
     User,
 )
+from app.db.models.phase8 import (  # noqa: F401
+    BaselineComparison,
+    BenchmarkRun,
+    DriftCorrelation,
+    DriftFinding,
+    EventLineageCompact,
+    EventRevision,
+    GoldenBaseline,
+    ReplayJob,
+    ShadowRun,
+)

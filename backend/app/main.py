@@ -28,6 +28,7 @@ from app.api.routes import (
 from app.config import get_settings
 from app.core.logging import configure_logging
 from app.governance.policy import governed
+from app.phase8.register import register_all as register_phase8
 from app.schema.errors import ErrorDetail, ErrorResponse
 from app.services import scheduler
 
@@ -110,6 +111,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 # audit) is applied to the existing mutating endpoints as a router-level
 # dependency: the Phase 3/5/6 routers and services themselves are unchanged.
 GOVERNED = [Depends(governed)]
+
+# Phase 8: attach guards / scheduler steps / persist hooks through the approved
+# Phase 7 registries (idempotent; nothing is attached when PHASE8_ENABLED=false).
+register_phase8()
 
 app.include_router(health.router)
 app.include_router(ingest.router, prefix=settings.api_v1_prefix)

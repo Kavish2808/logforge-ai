@@ -16,6 +16,12 @@ routers and services are not modified. For every governed request it:
 
 Maker-checker can only be enforced between *identified* actors. With
 anonymous proposals (permissive mode) the audit record says so explicitly.
+
+Phase 8 hook (additive): pre-action guards registered with `register_guard`
+run after the checks above and before the action. A guard may BLOCK (409) or
+require ELEVATED review (authenticated SOC_ADMIN + a written `note`); both are
+audited with the guard's reason and evidence. A guard that crashes blocks the
+action (fail closed). With no guards registered behavior is unchanged.
 """
 from __future__ import annotations
 
@@ -50,6 +56,40 @@ class Rule:
     maker_actions: tuple[str, ...] = ()  # proposing actions whose actors may not approve (maker-checker)
     identity_fields: tuple[str, ...] = field(default_factory=lambda: IDENTITY_FIELDS)
     action_for: Callable[[dict[str, Any]], str] | None = None
+
+
+@dataclass(frozen=True)
+class GuardContext:
+    db: Session
+    action: str
+    object_type: str
+    object_id: str | None
+    params: dict[str, str]
+    body: dict[str, Any]
+    actor: Actor
+
+
+@dataclass(frozen=True)
+class GuardDecision:
+    allow: bool = True
+    elevated: bool = False  # allowed only for an authenticated SOC_ADMIN with a written note
+    reason: str = ""
+    evidence: dict[str, Any] = field(default_factory=dict)
+
+
+_GUARDS: dict[str, list[tuple[str, Callable[[GuardContext], GuardDecision | None]]]] = {}
+
+
+def register_guard(name: str, actions: tuple[str, ...], fn: Callable[[GuardContext], GuardDecision | None]) -> None:
+    """Register a pre-action guard for the given audit action names (idempotent per name)."""
+    for action in actions:
+        entries = _GUARDS.setdefault(action, [])
+        entries[:] = [e for e in entries if e[0] != name] + [(name, fn)]
+
+
+def unregister_guard(name: str) -> None:
+    for entries in _GUARDS.values():
+        entries[:] = [e for e in entries if e[0] != name]
 
 
 def _static(cap: str) -> Callable[..., str]:
@@ -238,6 +278,19 @@ async def governed(request: Request, db: Session = Depends(get_db)) -> AsyncGene
             mc.update(enforced=True, violation=False)
         details["maker_checker"] = mc
 
+    guard_results = _run_guards(GuardContext(db, action, rule.object_type, object_id, params, body, actor))
+    if guard_results:
+        details["guards"] = guard_results
+        blocked = next((g for g in guard_results if g["verdict"] == "BLOCK"), None)
+        if blocked is not None:
+            raise deny(409, f"Phase 8 guard '{blocked['guard']}' blocked {action}: {blocked['reason']}")
+        elevated = [g for g in guard_results if g["verdict"] == "ELEVATED"]
+        if elevated:
+            note = str(body.get("note") or "").strip()
+            if not (actor.authenticated and actor.role == roles.SOC_ADMIN and note):
+                raise deny(403, f"Elevated review required by Phase 8 guard '{elevated[0]['guard']}': "
+                                f"{elevated[0]['reason']} An authenticated SOC_ADMIN must approve with a written note.")
+
     try:
         yield actor
     except HTTPException as exc:
@@ -256,6 +309,24 @@ async def governed(request: Request, db: Session = Depends(get_db)) -> AsyncGene
         if "proposal_version" in body:
             evidence = f"{evidence}@proposal_v{body['proposal_version']}"
         _audit(db, actor, action, rule, object_id, audit_service.SUCCESS, details, evidence)
+
+
+def _run_guards(ctx: GuardContext) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for name, fn in list(_GUARDS.get(ctx.action, [])):
+        try:
+            decision = fn(ctx)
+        except Exception as exc:  # noqa: BLE001 — a broken guard must never let an unsafe action through
+            ctx.db.rollback()
+            logger.exception("Phase 8 guard %s crashed on %s", name, ctx.action)
+            results.append({"guard": name, "verdict": "BLOCK", "reason": f"guard error ({type(exc).__name__}); failing closed",
+                            "evidence": {}})
+            continue
+        if decision is None:
+            continue
+        verdict = "BLOCK" if not decision.allow else "ELEVATED" if decision.elevated else "ALLOW"
+        results.append({"guard": name, "verdict": verdict, "reason": decision.reason, "evidence": decision.evidence})
+    return results
 
 
 def _after_success(db: Session, rule: Rule, action: str, object_id: str | None, params: dict[str, str],

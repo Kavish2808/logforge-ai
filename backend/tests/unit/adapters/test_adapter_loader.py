@@ -57,7 +57,7 @@ def test_paloalto_adapter_matches_on_device_vendor():
 
 def test_unrecognized_format_returns_none():
     registry = load_adapters()
-    assert registry.find_for("xml", {}) is None
+    assert registry.find_for("evtx", {}) is None
 
 
 def test_duplicate_adapter_id_is_rejected(tmp_path):

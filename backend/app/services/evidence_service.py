@@ -74,6 +74,7 @@ def persist_new(db: Session, event: Event, spill: SpillResult | None) -> None:
     if spill is not None:
         _write_overflow(db, event, spill)
     _archive_raw(db, event)
+    _run_persist_hooks(db, event, reprocessed=False)
 
 
 def persist_reprocessed(db: Session, event: Event, spill: SpillResult | None) -> None:
@@ -81,6 +82,33 @@ def persist_reprocessed(db: Session, event: Event, spill: SpillResult | None) ->
     db.execute(delete(EventExtensionOverflow).where(EventExtensionOverflow.event_id == event.event_id))
     if spill is not None:
         _write_overflow(db, event, spill)
+    _run_persist_hooks(db, event, reprocessed=True)
+
+
+# Phase 8 hook (additive): callbacks run in the event's transaction, each
+# inside a SAVEPOINT, so a failing callback is rolled back on its own and can
+# never lose the event, its overflow or its raw-storage record.
+_PERSIST_HOOKS: list[tuple[str, Any]] = []
+
+
+def register_persist_hook(name: str, fn) -> None:
+    """Register `fn(db, event, reprocessed: bool)` (idempotent per name)."""
+    _PERSIST_HOOKS[:] = [h for h in _PERSIST_HOOKS if h[0] != name] + [(name, fn)]
+
+
+def unregister_persist_hook(name: str) -> None:
+    _PERSIST_HOOKS[:] = [h for h in _PERSIST_HOOKS if h[0] != name]
+
+
+def _run_persist_hooks(db: Session, event: Event, *, reprocessed: bool) -> None:
+    for name, fn in list(_PERSIST_HOOKS):
+        savepoint = db.begin_nested()
+        try:
+            fn(db, event, reprocessed)
+            savepoint.commit()
+        except Exception:  # noqa: BLE001 — evidence must commit even if a hook fails
+            savepoint.rollback()
+            logger.exception("Persist hook %s failed for event %s; event evidence unaffected.", name, event.event_id)
 
 
 def _write_overflow(db: Session, event: Event, spill: SpillResult) -> None:

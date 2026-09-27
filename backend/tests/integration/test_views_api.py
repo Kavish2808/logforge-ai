@@ -178,7 +178,7 @@ def test_summary_counts_match_the_database(client, db_session, loop):
     assert s["totals"]["unique_sources"] == db("SELECT count(DISTINCT adapter_id) FROM events")
     assert s["totals"]["pending_reviews"] == db("SELECT count(*) FROM events WHERE status='UNDER_REVIEW'")
     assert s["totals"]["drift_events"] == db("SELECT count(*) FROM events WHERE processing_metadata->'drift'->>'status' IN ('DRIFT','POSSIBLE_FORMAT_DRIFT')")
-    assert s["adapters"] == {"shipped_vendor": 3, "shipped_generic": 3, "onboarded_active": 1}
+    assert s["adapters"] == {"shipped_vendor": 3, "shipped_generic": 5, "onboarded_active": 1}
     assert s["learning_sessions"] == {"ACTIVE": 1} and s["onboarding_sessions"] == {"APPROVED": 1}
     assert sum(b["total"] for b in s["trend"]) == s["totals"]["events"]
     assert get(client, "/summary", status="FAILED")["totals"]["events"] == s["by_status"]["FAILED"]

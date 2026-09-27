@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.adapters.loader import AdapterRegistry, get_adapter_registry
-from app.pipeline.detector.format_detector import detect_format
+from app.pipeline.detector.format_detector import detect_format, detect_secondary_format
 from app.pipeline.fingerprint.structural import compute_fingerprint
 from app.pipeline.hashing import sha256_hex
 from app.pipeline.normalizer.ocsf_mapper import normalize
@@ -77,6 +77,10 @@ def process(
     # still match a human-approved declarative adapter. With no such adapter
     # registered this is always None and behavior is exactly as before.
     declarative = registry.find_declarative(raw_log) if format_detected == FormatType.UNKNOWN else None
+
+    # Phase 8: native LEEF/XML only after onboarded adapters had priority.
+    if format_detected == FormatType.UNKNOWN and declarative is None:
+        format_detected = detect_secondary_format(raw_log)
 
     if format_detected == FormatType.UNKNOWN and declarative is None:
         return PipelineResult(

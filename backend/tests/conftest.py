@@ -96,6 +96,10 @@ def db_session():
         session.execute(text("DELETE FROM onboarded_adapters"))
         session.execute(text("DELETE FROM onboarding_sessions"))
         # Phase 7 tables (event-scoped overflow/raw-storage rows cascade with events).
+        # Phase 8 tables (event_revisions / event_lineage_compact cascade with events).
+        for table in ("replay_jobs", "golden_baselines", "baseline_comparisons", "drift_findings",
+                      "drift_correlations", "shadow_runs", "benchmark_runs"):
+            session.execute(text(f"DELETE FROM {table}"))
         for table in ("evidence_batch_members", "evidence_batches", "overflow_signatures", "audit_log",
                       "review_slas", "governance_settings", "confidence_ledger", "alerts", "export_log",
                       "auth_tokens", "users"):

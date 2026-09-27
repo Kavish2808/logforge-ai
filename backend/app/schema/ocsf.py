@@ -33,6 +33,11 @@ class FormatType(StrEnum):
     DELIMITED = "delimited"
     KV = "kv"
     UNKNOWN = "unknown"
+    # Phase 8: native formats found only by the SECONDARY detector
+    # (detect_secondary_format), i.e. only when detect_format() returned
+    # UNKNOWN and no human-approved onboarded adapter matched.
+    LEEF = "leef"
+    XML = "xml"
 
 
 class NetworkInfo(BaseModel):

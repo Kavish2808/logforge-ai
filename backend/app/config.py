@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     alert_email_to: str = ""
     alert_delivery_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
 
+    # ---- Phase 8: scale, advanced adaptation and resilience (additive) ----
+    # false = register no Phase 8 guard / scheduler step / persist hook (Phase 7 behavior).
+    phase8_enabled: bool = True
+
     @property
     def is_production(self) -> bool:
         return self.app_env.strip().lower() in ("production", "prod")

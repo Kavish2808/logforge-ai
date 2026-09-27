@@ -25,6 +25,19 @@ _TICK_LOCK = 0x4C46_5449_434B  # "LFTICK"
 
 _state: dict[str, Any] = {"thread": None, "stop": None, "last_run": None, "last_result": None}
 
+# Phase 8 hook (additive): extra steps run after the four Phase 7 steps, in
+# registration order, under the same per-step isolation.
+_EXTRA_STEPS: list[tuple[str, Any]] = []
+
+
+def register_step(name: str, fn) -> None:
+    """Register an extra scheduler step `fn(db) -> dict` (idempotent per name)."""
+    _EXTRA_STEPS[:] = [s for s in _EXTRA_STEPS if s[0] != name] + [(name, fn)]
+
+
+def unregister_step(name: str) -> None:
+    _EXTRA_STEPS[:] = [s for s in _EXTRA_STEPS if s[0] != name]
+
 
 def run_once(db: Session) -> dict[str, Any]:
     from app.services import evidence_service, monitor_service, sla_service
@@ -35,7 +48,7 @@ def run_once(db: Session) -> dict[str, Any]:
         ("merkle_seal", lambda: {"batches_sealed": len(evidence_service.seal(db))}),
         ("review_sla", lambda: sla_service.sweep(db)),
         ("alerts", lambda: monitor_service.sweep(db)),
-    )
+    ) + tuple((name, (lambda fn=fn: fn(db))) for name, fn in _EXTRA_STEPS)
     for name, step in steps:
         try:
             result[name] = step()
