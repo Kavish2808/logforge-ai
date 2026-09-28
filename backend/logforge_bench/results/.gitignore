@@ -1,0 +1,3 @@
+# Bulky per-event/per-sample artifacts stay local; result.json / suite.json summaries are kept.
+*.jsonl
+*.log

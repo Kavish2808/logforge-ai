@@ -1,0 +1,76 @@
+# Step 10B — benchmark-only horizontal-scaling environment. NOT a production deployment profile.
+#
+#   bench (load generator)  ->  lb (nginx, round-robin)  ->  api x N (same image + same code)  ->  db (shared)
+#
+# - Reuses the dev stack's PostgreSQL (`db` on network logforge-ai_default) and the `logforge_bench`
+#   database, exactly as Step 10 did, so only the application tier changes.
+# - Every replica is the same image with the same working-tree code mounted read-only, started with the
+#   same command Step 10 used for its HTTP server (1 uvicorn worker, no --reload, access log off).
+# - Replicas do NOT run migrations (the harness migrates `logforge_bench` once, like Step 10).
+# - The raw vault and the Merkle anchor store are filesystem-based, so all replicas share ONE volume.
+#
+# Usage: scripts/bench-scale.sh (brings it up with --scale api=N).
+name: logforge-scale
+
+x-bench-db: &bench_db postgresql+psycopg://${POSTGRES_USER:-logforge}:${POSTGRES_PASSWORD:-logforge}@db:5432/logforge_bench
+
+services:
+  api:
+    image: logforge-ai-backend:latest
+    working_dir: /app
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--workers", "1", "--no-access-log", "--log-level", "warning"]
+    environment:
+      DATABASE_URL: *bench_db
+      RAW_VAULT_PATH: /var/lib/logforge-bench/raw_vault
+      EVIDENCE_ANCHOR_PATH: /var/lib/logforge-bench/anchors
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-false}
+      SCHEDULER_INTERVAL_SECONDS: "60"
+      RBAC_MODE: permissive
+      LLM_PROVIDER: offline
+      DEBUG: "false"
+    volumes:
+      - ../..:/app:ro
+      - evidence:/var/lib/logforge-bench
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    networks: [devnet]
+
+  lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - lblogs:/var/log/nginx-bench
+    ports:
+      - "127.0.0.1:18080:8080"   # diagnostics only; the load generator uses lb:8080 on the Docker network
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [devnet]
+
+  bench:
+    image: logforge-ai-backend:latest
+    working_dir: /app
+    command: ["sleep", "infinity"]
+    environment:
+      # application database URL: the harness derives and migrates `<db>_bench` from it (never writes to it)
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-logforge}:${POSTGRES_PASSWORD:-logforge}@db:5432/${POSTGRES_DB:-logforge}
+      LOGFORGE_BENCH_SHARED_EVIDENCE: /var/lib/logforge-bench
+      LOGFORGE_BENCH_LB_LOG: /var/log/nginx-bench/access.log
+    volumes:
+      - ../..:/app
+      - evidence:/var/lib/logforge-bench
+      - lblogs:/var/log/nginx-bench:ro
+    networks: [devnet]
+
+networks:
+  devnet:
+    external: true
+    name: logforge-ai_default
+
+volumes:
+  evidence:
+  lblogs:

@@ -8,3 +8,4 @@ htmlcov/
 .coverage
 .env
 .git/
+logforge_bench/
