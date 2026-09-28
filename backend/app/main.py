@@ -13,6 +13,7 @@ from app.api.routes import (
     alerts,
     auth,
     confidence,
+    dashboard,
     demo,
     drift,
     events,
@@ -20,6 +21,7 @@ from app.api.routes import (
     governance,
     health,
     ingest,
+    integrations,
     integrity,
     learning,
     onboarding,
@@ -118,7 +120,9 @@ GOVERNED = [Depends(governed)]
 register_phase8()
 
 app.include_router(health.router)
-app.include_router(ingest.router, prefix=settings.api_v1_prefix)
+app.include_router(dashboard.router)
+app.include_router(integrations.router)
+app.include_router(ingest.router)
 app.include_router(events.router, prefix=settings.api_v1_prefix, dependencies=GOVERNED)
 app.include_router(drift.router, prefix=settings.api_v1_prefix, dependencies=GOVERNED)
 app.include_router(onboarding.router, prefix=settings.api_v1_prefix, dependencies=GOVERNED)
