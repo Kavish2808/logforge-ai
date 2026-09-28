@@ -4,27 +4,53 @@ from __future__ import annotations
 import json
 from typing import Any
 from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.schema.ingest import BatchIngestRequest, BatchIngestResponse, IngestRequest
+from app.schema.ingest import MAX_BATCH_SIZE, BatchIngestRequest, BatchIngestResponse, IngestRequest
 from app.schema.ocsf import UniversalEvent
 from app.services import ingestion_service
 
 router = APIRouter(tags=["ingest"])
 
 
+class _ConsoleEvent(BaseModel):
+    raw: str
+
+
+class _ConsoleIngestRequest(BaseModel):
+    source: str = "default"
+    events: list[_ConsoleEvent | str] = Field(..., max_length=MAX_BATCH_SIZE)
+
+
+def _validate(model: type[BaseModel], data: bytes | dict) -> Any:
+    # Validate inside the route (the body shape decides the model) but keep the
+    # standard 422 VALIDATION_ERROR envelope that typed body parameters produce.
+    try:
+        return model.model_validate_json(data) if isinstance(data, bytes) else model.model_validate(data)
+    except ValidationError as exc:
+        raise RequestValidationError([{**err, "loc": ("body", *err["loc"])} for err in exc.errors()]) from exc
+
+
 @router.post("/ingest", status_code=201)
 @router.post("/api/v1/ingest", status_code=201)
 async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
-    body = await request.json()
+    raw_body = await request.body()
+    try:
+        body = json.loads(raw_body)
+    except ValueError as exc:
+        raise RequestValidationError([{"loc": ("body",), "msg": "Invalid JSON body", "type": "json_invalid"}]) from exc
     if isinstance(body, dict) and "events" in body:
         # Flexible multi-event format from console
-        source = body.get("source", "default")
-        events_list = body.get("events", [])
-        raw_lines = [e.get("raw") if isinstance(e, dict) else str(e) for e in events_list if e]
+        console = _validate(_ConsoleIngestRequest, raw_body)
+        raw_lines = [e.raw if isinstance(e, _ConsoleEvent) else e for e in console.events]
+        raw_lines = [line for line in raw_lines if line]
         if not raw_lines:
             return {"accepted": 0, "duplicates": 0, "total": 0}
+        # Each line gets the same boundary checks as a single raw_log (length, NUL bytes).
+        _validate(BatchIngestRequest, {"logs": [{"raw_log": line} for line in raw_lines]})
         outcome = ingestion_service.ingest_batch(db, raw_lines)
         return {
             "accepted": len(outcome.results),
@@ -36,8 +62,8 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
         }
     
     # Standard single IngestRequest
-    raw_log = body.get("raw_log") if isinstance(body, dict) else str(body)
-    return ingestion_service.ingest_raw_log(db, raw_log)
+    single = _validate(IngestRequest, raw_body)
+    return ingestion_service.ingest_raw_log(db, single.raw_log)
 
 
 @router.post("/ingest/batch", response_model=BatchIngestResponse, status_code=201)
