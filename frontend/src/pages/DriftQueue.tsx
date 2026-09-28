@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { acceptDrift, getBaseline, getEvent, getEvents, proposeLearning } from "../api/endpoints";
 import type { DriftRecord, EventRow } from "../api/types";
+import { Phase8ReviewQueue } from "../components/reviewQueue";
 import { ActingAs, SlaPanel } from "../components/trust";
 import { Badge, Card, KV, Load, Pipeline } from "../components/ui";
 import { fmtTime } from "../lib/format";
@@ -213,6 +214,7 @@ export function DriftQueue() {
           {selected ? <DriftDetail key={selected.event_id} row={selected} onDecided={refresh} /> : <div className="state">Select a drift event to review it.</div>}
         </Card>
       </div>
+      <Phase8ReviewQueue />
     </>
   );
 }

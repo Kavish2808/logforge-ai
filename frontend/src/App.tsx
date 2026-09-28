@@ -5,6 +5,10 @@ import { useAuth } from "./lib/auth";
 import { useApi } from "./lib/useApi";
 import { href, useRoute } from "./lib/router";
 import { AdapterEvolution } from "./pages/AdapterEvolution";
+import { AdvancedDrift } from "./pages/AdvancedDrift";
+import { Baselines } from "./pages/Baselines";
+import { Correlations } from "./pages/Correlations";
+import { ReplayPage } from "./pages/Replay";
 import { AlertsPage } from "./pages/Alerts";
 import { AuditPage } from "./pages/Audit";
 import { Demo } from "./pages/Demo";
@@ -21,7 +25,9 @@ import { Sources } from "./pages/Sources";
 
 const NAV: { group: string; items: { id: string; label: string }[] }[] = [
   { group: "Operate", items: [{ id: "overview", label: "Overview" }, { id: "events", label: "Event Explorer" }, { id: "sources", label: "Sources" }] },
-  { group: "Adapt", items: [{ id: "drift", label: "Drift Queue" }, { id: "onboarding", label: "Onboarding" }, { id: "evolution", label: "Adapter Evolution" }, { id: "learning", label: "Learning" }] },
+  { group: "Adapt", items: [{ id: "drift", label: "Drift Queue" }, { id: "advanced-drift", label: "Advanced Drift" }, { id: "baselines", label: "Baseline Integrity" },
+    { id: "onboarding", label: "Onboarding" }, { id: "evolution", label: "Adapter Evolution" }, { id: "learning", label: "Learning" }] },
+  { group: "Investigate", items: [{ id: "correlations", label: "Correlations" }, { id: "replay", label: "Replay & Revisions" }] },
   { group: "Trust", items: [{ id: "integrity", label: "Integrity" }, { id: "alerts", label: "Alerts" }, { id: "audit", label: "Audit Log" }, { id: "governance", label: "Governance" }] },
   { group: "Integrate", items: [{ id: "export", label: "Export" }] },
   { group: "Showcase", items: [{ id: "demo", label: "Demo" }] },
@@ -72,6 +78,10 @@ export default function App() {
       case "forensics": return <EventForensics id={route.param!} />;
       case "sources": return <Sources sourceKey={route.param} />;
       case "drift": return <DriftQueue />;
+      case "advanced-drift": return <AdvancedDrift />;
+      case "baselines": return <Baselines sourceKey={route.param} />;
+      case "correlations": return <Correlations correlationId={route.param} />;
+      case "replay": return <ReplayPage jobId={route.param} />;
       case "onboarding": return <Onboarding sessionId={route.param} />;
       case "evolution": return <AdapterEvolution sourceKey={route.param} />;
       case "learning": return <Learning sessionId={route.param} />;

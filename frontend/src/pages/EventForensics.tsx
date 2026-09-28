@@ -3,6 +3,7 @@
 import { getEvent, getEvents, getLineage } from "../api/endpoints";
 import type { AccountedField, Lineage, LineageStage, UniversalEvent } from "../api/types";
 import { EvidenceCard } from "../components/EvidenceCard";
+import { CompactLineageCard, RevisionsCard } from "../components/forensics";
 import { Badge, Card, Id, Json, KV, Load, Tabs } from "../components/ui";
 import { fmtTime, num } from "../lib/format";
 import { Link } from "../lib/router";
@@ -266,8 +267,10 @@ export function EventForensics({ id }: { id: string }) {
                 </Card>
                 <Card title="Field accounting"><Accounting lineage={l} /></Card>
                 <EvidenceCard lineage={l} />
+                <CompactLineageCard eventId={id} />
               </div>
             </div>
+            <RevisionsCard eventId={id} />
             <Card title="Raw vs normalized" className="" >
               <RawNormalizedTabs lineage={l} event={event.data} eventError={event.error} />
             </Card>

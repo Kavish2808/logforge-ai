@@ -286,6 +286,7 @@ export interface LearningSession {
   proposal_source: string | null;
   assistant: (Dict & { name?: string; error?: { kind: string; message: string } | null }) | null;
   mapping_diff: { added: string[]; removed: string[]; changed: string[]; unchanged: string[]; optional_fields: string[] } | null;
+  candidate?: Dict | null;  // candidate adapter of the current proposal (Phase 8 shadow validation compares it)
   validation: (Dict & {
     result?: string;
     reasons?: string[];

@@ -5,6 +5,7 @@ import {
   backfillVault, getBatches, getOverflowEvidence, getTrust, overflowToOnboarding, recoverRaw, sealNow, verifyChain, verifyEvent,
 } from "../api/endpoints";
 import type { ChainVerify, EventVerify, RawRecovery } from "../api/types";
+import { CompactLineageStatsCard } from "../components/forensics";
 import { Badge, Card, KV, Load, Stat } from "../components/ui";
 import { fmtTime, num, pct, shortHash } from "../lib/format";
 import { Link, navigate } from "../lib/router";
@@ -177,6 +178,7 @@ export function IntegrityPage() {
               )}
             </Load>
           </Card>
+          <CompactLineageStatsCard />
         </div>
       </div>
       <Card title="Extension overflow → onboarding evidence">

@@ -9,6 +9,7 @@ import { fmtTime, providerLabel } from "../lib/format";
 import { useAuth } from "../lib/auth";
 import { Link, navigate } from "../lib/router";
 import { errorMessage, useApi } from "../lib/useApi";
+import { ShadowPanel } from "./ShadowValidation";
 
 const STATUSES = ["PROPOSED", "VALIDATED", "NEEDS_REVIEW", "FAILED", "APPROVED", "ACTIVE", "ROLLED_BACK", "REJECTED", "NO_CHANGE_REQUIRED"];
 const FLOW = ["Drift", "Evidence", "Proposal", "Validation", "Human approval", "Adapter version"];
@@ -220,6 +221,7 @@ function Detail({ id }: { id: string }) {
                 {v.compatibility_confirmation_required && <div className="notice warn" style={{ marginTop: 10 }}>Backward compatibility is below threshold — approval requires explicit supersede confirmation.</div>}
                 <ul className="small" style={{ marginTop: 10, paddingLeft: 18 }}>{(v.reasons ?? []).map((r) => <li key={r}>{r}</li>)}</ul>
               </Card>
+              {(s.candidate || ["VALIDATED", "NEEDS_REVIEW", "APPROVED", "ACTIVE"].includes(s.status)) && <ShadowPanel session={s} />}
               <Card title="Decision">
                 <ActingAs />
                 {["PROPOSED", "VALIDATED", "NEEDS_REVIEW", "FAILED", "APPROVED"].includes(s.status) && <SlaPanel itemType="LEARNING_SESSION" itemId={s.id} />}
