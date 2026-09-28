@@ -1,0 +1,16 @@
+{
+  "database": "isolated SQLite",
+  "real_http": true,
+  "passed": true,
+  "concurrent_requests": 8,
+  "verified_evidence_events": 28,
+  "integrity_before_benchmark": {
+    "valid": true,
+    "total": 28,
+    "failures": [],
+    "audit_valid": true,
+    "batches_valid": true,
+    "anchoring": "HMAC signed local manifests; external WORM not configured"
+  },
+  "drain_undrain": true
+}

@@ -1,0 +1,126 @@
+{
+  "report_version": 1,
+  "kind": "measured",
+  "run_id": "73788626a252402abf300be4a282a6c5",
+  "base_url": "http://127.0.0.1:18010",
+  "source": "smoke-benchmark",
+  "started_unix": 1790616694.4625633,
+  "batch_sizes": [
+    {
+      "events_per_request": 1,
+      "requests": 1,
+      "accepted": 1,
+      "elapsed_seconds": 0.006859400018583983,
+      "events_per_second": 145.78534526208233,
+      "latency": {
+        "samples": 1,
+        "p50_ms": 6.81089999852702,
+        "p95_ms": 6.81089999852702,
+        "p99_ms": 6.81089999852702,
+        "mean_ms": 6.81089999852702,
+        "note": "Request latency, not inferred per-event latency. Low sample counts are descriptive only."
+      },
+      "errors": []
+    },
+    {
+      "events_per_request": 100,
+      "requests": 1,
+      "accepted": 100,
+      "elapsed_seconds": 0.2094755000434816,
+      "events_per_second": 477.3827964570684,
+      "latency": {
+        "samples": 1,
+        "p50_ms": 208.19590002065524,
+        "p95_ms": 208.19590002065524,
+        "p99_ms": 208.19590002065524,
+        "mean_ms": 208.19590002065524,
+        "note": "Request latency, not inferred per-event latency. Low sample counts are descriptive only."
+      },
+      "errors": []
+    },
+    {
+      "events_per_request": 1000,
+      "requests": 1,
+      "accepted": 1000,
+      "elapsed_seconds": 2.280331199988723,
+      "events_per_second": 438.53278857253076,
+      "latency": {
+        "samples": 1,
+        "p50_ms": 2268.551799992565,
+        "p95_ms": 2268.551799992565,
+        "p99_ms": 2268.551799992565,
+        "mean_ms": 2268.551799992565,
+        "note": "Request latency, not inferred per-event latency. Low sample counts are descriptive only."
+      },
+      "errors": []
+    },
+    {
+      "events_per_request": 10000,
+      "requests": 1,
+      "accepted": 10000,
+      "elapsed_seconds": 25.900997899996582,
+      "events_per_second": 386.0855106281955,
+      "latency": {
+        "samples": 1,
+        "p50_ms": 25786.35359997861,
+        "p95_ms": 25786.35359997861,
+        "p99_ms": 25786.35359997861,
+        "mean_ms": 25786.35359997861,
+        "note": "Request latency, not inferred per-event latency. Low sample counts are descriptive only."
+      },
+      "errors": []
+    }
+  ],
+  "database_before": {
+    "available": false,
+    "reason": "Set LOGFORGE_BENCHMARK_DATABASE_URL for optional PostgreSQL statistics."
+  },
+  "formats": [
+    "syslog",
+    "CEF",
+    "LEEF",
+    "XML",
+    "extension-heavy JSON",
+    "malformed",
+    "JSON"
+  ],
+  "extra_payload_bytes": 1024,
+  "concurrency": 1,
+  "metrics_before": "logforge_requests_total 40\nlogforge_active_requests 1\nlogforge_request_errors_total 0\nlogforge_request_seconds_total 0.9085308999055997\nlogforge_saturation_total 0\nlogforge_draining 0\nlogforge_process_resident_memory_bytes 85839872\nlogforge_process_cpu_seconds_total 1.203125\nlogforge_database_ready 1\nlogforge_events_persisted 28\nlogforge_replay_queue_depth 0\nlogforge_delivery_queue_depth 0\nlogforge_drift_pending 20\nlogforge_events_failed 4\nlogforge_events_parsed 20\nlogforge_events_partial 4\n",
+  "sustained": {
+    "duration_seconds": 1.9894519000081345,
+    "accepted": 540,
+    "latency": {
+      "samples": 54,
+      "p50_ms": 31.09609999228269,
+      "p95_ms": 64.44292498053984,
+      "p99_ms": 78.99026896164285,
+      "mean_ms": 36.829062962809715,
+      "note": "Request latency, not inferred per-event latency. Low sample counts are descriptive only."
+    },
+    "errors": [],
+    "events_per_second": 271.431543531056
+  },
+  "integrity": {
+    "valid": true,
+    "total": 11669,
+    "failures": [],
+    "audit_valid": true,
+    "batches_valid": true,
+    "anchoring": "HMAC signed local manifests; external WORM not configured"
+  },
+  "metrics_after": "logforge_requests_total 100\nlogforge_active_requests 1\nlogforge_request_errors_total 0\nlogforge_request_seconds_total 38.35510029975558\nlogforge_saturation_total 0\nlogforge_draining 0\nlogforge_process_resident_memory_bytes 157151232\nlogforge_process_cpu_seconds_total 36.078125\nlogforge_database_ready 1\nlogforge_events_persisted 11669\nlogforge_replay_queue_depth 0\nlogforge_delivery_queue_depth 0\nlogforge_drift_pending 8326\nlogforge_events_failed 1643\nlogforge_events_parsed 8326\nlogforge_events_partial 1700\n",
+  "database_after": {
+    "available": false,
+    "reason": "Set LOGFORGE_BENCHMARK_DATABASE_URL for optional PostgreSQL statistics."
+  },
+  "resources": {
+    "note": "Server PIDs only; CPU can exceed 100% across cores.",
+    "samples": 74,
+    "cpu_percent_mean": 0.0,
+    "cpu_percent_max": 0.0,
+    "rss_bytes_max": 8511488
+  },
+  "finished_unix": 1790616732.2863228,
+  "passed": true
+}

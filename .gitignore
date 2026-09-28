@@ -20,3 +20,5 @@ frontend/.vite/
 
 # Phase 7 local evidence storage (raw vault / anchors) when run outside Docker
 backend/data/
+data/
+LogForge-AI-Source/

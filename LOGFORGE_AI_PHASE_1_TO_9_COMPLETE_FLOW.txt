@@ -1,0 +1,1538 @@
+You are working on LOGFORGE AI.
+
+Before making any change, understand the complete project evolution from Phase 1 through Phase 9 below.
+
+============================================================
+LOGFORGE AI — COMPLETE PHASE 1–9 PROJECT CONTEXT
+============================================================
+
+PROJECT:
+LogForge AI — Universal Adaptive Log Pre-processing Framework (ULPF)
+
+CORE IDEA:
+
+Any Log
+   ↓
+Detect
+   ↓
+Parse
+   ↓
+Normalize
+   ↓
+Preserve
+   ↓
+Verify
+   ↓
+Learn
+   ↓
+Analyze
+
+LogForge is designed to solve the problem of different vendors and systems producing different log formats, fields, structures and behaviors.
+
+The system converts heterogeneous logs into a common, traceable and lossless representation while allowing unknown vendors and changing log structures to be safely learned over time.
+
+IMPORTANT PRINCIPLE:
+
+"Never silently lose evidence."
+
+The original/raw event must remain recoverable even when parsing or normalization is incomplete.
+
+============================================================
+PHASE 1 — CORE INGESTION & PARSING FOUNDATION
+============================================================
+
+PURPOSE:
+
+Build the basic deterministic log ingestion pipeline.
+
+The system must be able to accept raw log events and process them through a controlled pipeline.
+
+CORE FLOW:
+
+Raw Log
+  ↓
+Ingestion
+  ↓
+Format Detection
+  ↓
+Parser
+  ↓
+Normalized Event
+  ↓
+Database
+
+SUPPORTED CORE FORMATS:
+
+- Syslog
+- JSON
+- CEF
+
+CORE COMPONENTS:
+
+1. FastAPI backend
+2. PostgreSQL database
+3. Python parsing engine
+4. Pydantic schemas
+5. YAML-based mappings/configuration
+6. Dockerized environment
+7. React frontend foundation
+
+IMPORTANT:
+
+The parser must be deterministic.
+
+The system should not depend on an LLM for normal known-format parsing.
+
+Known formats should be parsed using deterministic parser logic.
+
+============================================================
+PHASE 2 — VENDOR ADAPTERS + NORMALIZATION
+============================================================
+
+PURPOSE:
+
+Move from generic parsing to vendor-aware parsing and common normalization.
+
+SHIPPPED VENDOR ADAPTERS:
+
+- Cisco ASA
+- Fortinet
+- Palo Alto
+
+Also maintain generic adapters for:
+
+- Syslog
+- JSON
+- CEF
+
+The adapter architecture must be extensible.
+
+A vendor-specific adapter should transform vendor-specific fields into a common representation.
+
+============================================================
+NORMALIZATION
+============================================================
+
+The system follows an OCSF-aligned normalized structure.
+
+Different vendors may use different names:
+
+src_ip
+source_ip
+sourceAddress
+
+These should map toward a common representation.
+
+Example conceptual normalized structure:
+
+{
+  "event_id": "...",
+  "timestamp": "...",
+  "vendor": "...",
+  "product": "...",
+  "event_type": "...",
+  "source": {...},
+  "destination": {...},
+  "network": {...},
+  "extensions": {...}
+}
+
+IMPORTANT:
+
+OCSF-aligned does NOT mean claiming complete OCSF compliance.
+
+The current system uses an OCSF-inspired/aligned normalization model.
+
+============================================================
+RAW EVENT PRESERVATION
+============================================================
+
+Every event retains the original raw payload.
+
+The system should maintain:
+
+- raw event
+- normalized event
+- event ID
+- source/vendor information
+- processing status
+- SHA-256 integrity hash
+
+This enables later forensic verification.
+
+============================================================
+PHASE 3 — UNKNOWN VENDOR ADAPTIVE ONBOARDING
+============================================================
+
+PURPOSE:
+
+Handle a vendor/source that the system does not currently understand.
+
+Instead of manually writing a parser from scratch, LogForge can learn a parser proposal from a small sample.
+
+FLOW:
+
+Unknown Vendor
+   ↓
+Collect Samples
+   ↓
+Parser Suggestion
+   ↓
+Sandbox Validation
+   ↓
+Match Rate
+   ↓
+Human Approval
+   ↓
+Versioned Adapter
+   ↓
+Deterministic Runtime Parsing
+
+RECOMMENDED SAMPLE SIZE:
+
+10–15 samples.
+
+Maximum supported onboarding sample size is bounded.
+
+============================================================
+AI ROLE
+============================================================
+
+Claude/LLM may suggest:
+
+- field mappings
+- delimiters
+- parsing patterns
+- adapter structure
+
+BUT:
+
+The LLM does NOT directly execute arbitrary code.
+
+No:
+
+- eval
+- exec
+- arbitrary generated Python
+- subprocess execution
+
+The proposed adapter must be declarative and sandboxed.
+
+============================================================
+MATCH THRESHOLDS
+============================================================
+
+Default:
+
+≥90% match
+→ eligible for approval
+
+<50%
+→ rejected
+
+Between thresholds
+→ requires review
+
+Human approval is mandatory before activation.
+
+============================================================
+IMPORTANT DESIGN PRINCIPLE
+============================================================
+
+AI proposes.
+
+Deterministic system validates.
+
+Human approves.
+
+Deterministic runtime executes.
+
+This prevents an LLM from becoming an uncontrolled production parser.
+
+============================================================
+PHASE 4 — FULL INGESTION PIPELINE / HARDENING
+============================================================
+
+PURPOSE:
+
+Turn the earlier components into a complete reliable ingestion pipeline.
+
+Includes:
+
+- batch ingestion
+- event storage
+- parser orchestration
+- error handling
+- partial parsing
+- failure states
+- raw preservation
+- field accounting
+- reprocessing
+- event APIs
+- health APIs
+- Docker validation
+- security hardening
+
+FAILURE MODEL:
+
+If parsing fails:
+
+DO NOT discard the raw event.
+
+Instead preserve the raw event and mark processing appropriately:
+
+PARTIAL
+or
+FAILED
+
+Optional manual review / reprocessing can then be performed.
+
+============================================================
+FIELD ACCOUNTING
+============================================================
+
+The system tracks what happened to incoming information.
+
+Conceptually:
+
+Input fields
+    ↓
+Normalized fields
+    ↓
+Extension fields
+    ↓
+Unmapped/lost fields
+
+The goal is:
+
+0 silent unknown-field loss.
+
+Unknown fields should go into:
+
+extensions
+
+rather than being discarded.
+
+============================================================
+PHASE 5 — DRIFT DETECTION
+============================================================
+
+PURPOSE:
+
+Detect when a known vendor's log structure changes.
+
+Example:
+
+Original:
+
+src_ip
+dst_ip
+action
+port
+
+New:
+
+src_ip
+dst_ip
+action
+port
+policy_id
+
+This is structural drift.
+
+============================================================
+CURRENT STRUCTURAL SIGNALS
+============================================================
+
+The system compares:
+
+1. Field presence
+2. Field order
+3. Field count
+4. Field types
+
+Weighted similarity was implemented approximately as:
+
+Presence → 0.55
+Order → 0.20
+Count → 0.10
+Type → 0.15
+
+Threshold:
+
+0.85 was used as the structural similarity threshold.
+
+============================================================
+DRIFT TYPES
+============================================================
+
+Supported classifications include:
+
+- FIELD_ADDITION
+- FIELD_REMOVAL
+- FIELD_TYPE_CHANGE
+- FIELD_ORDER_CHANGE
+- FORMAT_DRIFT
+- MULTIPLE_STRUCTURAL_CHANGE
+
+The system also determines severity.
+
+Critical fields can influence severity.
+
+============================================================
+DRIFT WORKFLOW
+============================================================
+
+Known Adapter
+     ↓
+New Event
+     ↓
+Fingerprint
+     ↓
+Compare Baseline
+     ↓
+Similarity
+     ↓
+Drift Classification
+     ↓
+Human Review
+     ↓
+Accept Variant / Replace Baseline
+
+IMPORTANT:
+
+Phase 5 drift detection should remain deterministic.
+
+Do not silently replace the baseline just because drift was detected.
+
+============================================================
+PHASE 6 — CONTINUOUS ADAPTIVE LEARNING
+============================================================
+
+PURPOSE:
+
+Allow LogForge to evolve an already-onboarded adapter after accepted drift.
+
+IMPORTANT:
+
+Only adapters that have gone through the approved onboarding/learning process can evolve.
+
+Shipped/frozen YAML adapters should remain frozen unless explicitly designed otherwise.
+
+============================================================
+LEARNING FLOW
+============================================================
+
+Drift Detected
+      ↓
+Human Accepts Drift
+      ↓
+Evidence Collected
+      ↓
+Candidate Delta Created
+      ↓
+Historical Events Re-tested
+      ↓
+Sandbox Validation
+      ↓
+Human Approval
+      ↓
+New Adapter Version
+      ↓
+Activation
+      ↓
+Baseline Updated
+
+============================================================
+STATE MACHINE
+============================================================
+
+PROPOSED
+   ↓
+VALIDATED / NEEDS_REVIEW
+   ↓
+APPROVED
+   ↓
+ACTIVE
+   ↓
+ROLLED_BACK
+
+Rejected candidates must not become active.
+
+============================================================
+LEARNING SAFETY
+============================================================
+
+The system should:
+
+- preserve evidence
+- record event IDs/hashes
+- validate historical samples
+- avoid destructive changes
+- create immutable adapter versions
+- support rollback
+- prevent stale/identical revisions
+- maintain baseline history
+
+LLM assistance is optional and limited.
+
+LLM should not become the production runtime parser.
+
+============================================================
+PHASE 7 — TRUST, INTEGRITY & GOVERNANCE
+============================================================
+
+PURPOSE:
+
+Make the system auditable and trustworthy.
+
+============================================================
+EVIDENCE FABRIC
+============================================================
+
+Implemented concepts include:
+
+- Extension spill
+- Raw vault abstraction
+- Raw event preservation
+- SHA-256
+- Merkle integrity
+- Evidence tracking
+
+The raw evidence should remain recoverable even when normalized storage becomes constrained.
+
+============================================================
+GOVERNANCE
+============================================================
+
+Implemented:
+
+- RBAC
+- maker-checker
+- review SLA
+- confidence ledger
+- hash-chained audit log
+- alert bus
+
+Sensitive actions should be controlled by authorization and approval rules.
+
+============================================================
+EXPORT
+============================================================
+
+Implemented export capability including:
+
+- JSON
+- NDJSON
+
+The system is designed toward external SIEM/Data Lake integration, but do not claim full production SIEM forwarding unless actually implemented and verified.
+
+============================================================
+OPERATIONAL VISIBILITY
+============================================================
+
+The system includes:
+
+- Event Explorer
+- Event Forensics
+- Source Intelligence
+- Learning/Evolution visibility
+
+============================================================
+PHASE 8 — ADVANCED ADAPTIVE INTELLIGENCE
+============================================================
+
+Phase 8 extends the system without replacing the previous architecture.
+
+It consists of 12 steps.
+
+============================================================
+STEP 1 — PHASE 8 FOUNDATION
+============================================================
+
+Added extension hooks for:
+
+- policy guards
+- scheduler steps
+- evidence persistence hooks
+
+Added Phase 8 configuration and database foundation.
+
+Migration:
+
+0008
+
+Important:
+
+Existing Phase 7 behavior remains intact.
+
+============================================================
+STEP 2 — LEEF + XML
+============================================================
+
+Native support added for:
+
+- LEEF
+- XML
+
+Existing detection priority remains intact.
+
+Important:
+
+detect_format() should not be casually rewritten.
+
+Secondary detection is used where appropriate.
+
+Syslog-wrapped LEEF should remain Syslog.
+
+XML parsing must be security-conscious.
+
+Protection includes concerns such as:
+
+- XXE
+- entity expansion
+- oversized input
+- excessive depth
+- excessive element count
+- invalid/non-UTF8 data
+
+============================================================
+STEP 3 — COMPACT LINEAGE
+============================================================
+
+PURPOSE:
+
+Reduce lineage storage while preserving reconstruction capability.
+
+Implemented:
+
+- compact stage representation
+- exception mask
+- version information
+- strict decoding
+- evidence persistence hook
+
+Detailed lineage APIs remain available.
+
+The compact representation must not guess missing information.
+
+============================================================
+STEP 4 — STATISTICAL + SEMANTIC DRIFT
+============================================================
+
+Phase 5 structural drift remains intact.
+
+Phase 8 adds additional signals.
+
+STATISTICAL SIGNALS:
+
+- PSI
+- category share changes
+- null-rate changes
+- cardinality ratio
+- median shift
+- IQR changes
+
+Typical windows:
+
+- baseline approximately 168 hours
+- current approximately 1 hour
+- minimum sample requirement around 200
+
+The system should produce explainable findings.
+
+============================================================
+SEMANTIC DRIFT
+============================================================
+
+Semantic/advisory analysis occurs only after appropriate statistical/structural evidence.
+
+It should remain deterministic/advisory where implemented.
+
+Do not replace Phase 5 structural drift.
+
+============================================================
+STEP 5 — GOLDEN + CURRENT BASELINE
+============================================================
+
+Adds two concepts:
+
+GOLDEN BASELINE
+and
+CURRENT BASELINE
+
+Golden baseline represents a trusted reference.
+
+Current baseline represents the currently observed accepted structure/behavior.
+
+Golden operations require appropriate authorization and auditing.
+
+Potentially sensitive actions include:
+
+- pin golden
+- retire golden
+- baseline replacement
+- learning activation
+
+Maker-checker protection remains important.
+
+If there is no golden baseline, do not invent a blocking condition.
+
+============================================================
+STEP 6 — STRATIFIED SHADOW VALIDATION + CIRCUIT BREAKER
+============================================================
+
+PURPOSE:
+
+Before activating a candidate parser/adapter change, compare:
+
+OLD pipeline
+vs
+NEW candidate pipeline
+
+using real stored events.
+
+Six strata:
+
+1. FAILED
+2. DRIFT
+3. PARTIAL_WARNING
+4. EXTENSION_HEAVY
+5. NORMAL
+6. DIVERSITY
+
+Target:
+
+25 events per stratum where available.
+
+Never fabricate missing coverage.
+
+============================================================
+SHADOW COMPARISON
+============================================================
+
+Compare:
+
+- parse success
+- status
+- normalized fields
+- extensions
+- warnings
+- field accounting
+- drift
+- raw SHA
+- latency
+- run errors
+
+============================================================
+CIRCUIT BREAKER
+============================================================
+
+Default critical blockers include:
+
+- status degradation
+- evidence loss
+- raw SHA mismatch
+- candidate latency >3× old pipeline
+- execution errors
+
+Outcomes:
+
+PASSED
+REVIEW_REQUIRED
+BLOCKED
+
+Shadow testing must not mutate production data.
+
+============================================================
+STEP 7 — REVISION-AWARE REPLAY
+============================================================
+
+PURPOSE:
+
+Make reprocessing traceable and reversible.
+
+Every event gets revision history.
+
+Concept:
+
+Revision 1
+→ ORIGINAL
+
+Later:
+
+Revision 2
+→ REPLAY
+
+Revision 3
+→ REPLAY
+
+etc.
+
+Each revision records relevant adapter/version/evidence/SHA information.
+
+============================================================
+REPLAY
+============================================================
+
+Replay supports concepts including:
+
+- keyset cursor
+- checkpoint
+- token bucket/rate limiting
+- pause/cancel
+- resume
+- idempotency
+- raw SHA verification
+- Merkle verification
+
+Large replay operations require stronger governance.
+
+Current policy:
+
+>10,000 events require elevated approval.
+
+Current documented limitation:
+
+In permissive RBAC mode, ≤10,000 replay operations may be performed anonymously.
+
+This is intentionally a Phase 9 production-hardening concern.
+
+============================================================
+ROLLBACK
+============================================================
+
+Rollback uses a previous approved adapter version.
+
+The rollback process:
+
+Previous approved version
+      ↓
+Snapshot
+      ↓
+Rollback
+      ↓
+Integrity verification
+      ↓
+Explicit replay job
+
+Rollback should not silently destroy revision history.
+
+============================================================
+STEP 8 — CROSS-VENDOR DRIFT CORRELATION
+============================================================
+
+PURPOSE:
+
+Identify drift patterns occurring across multiple vendors/sources.
+
+Correlation window:
+
+approximately 60 minutes.
+
+Requires multiple distinct vendors/sources.
+
+Inputs can include:
+
+- structural drift
+- statistical drift
+- semantic findings
+- shared fields
+- temporal proximity
+- vendor diversity
+
+Output should contain:
+
+- correlation group
+- involved vendors/sources
+- evidence
+- event IDs
+- score components
+- explanation
+- strength
+
+IMPORTANT:
+
+This is an investigation capability.
+
+It must NOT automatically modify adapters or remediate production systems.
+
+============================================================
+STEP 9 — FRONTEND
+============================================================
+
+CURRENT/PLANNED PURPOSE:
+
+Expose Phase 8 intelligence through the React frontend.
+
+Expected areas:
+
+- Advanced Drift
+- Baseline Integrity
+- Learning
+- Shadow Validation
+- Circuit Breaker
+- Drift Queue
+- Replay
+- Revisions
+- Compact Lineage
+- Cross-Vendor Correlation
+- Forensics
+
+Responsive targets:
+
+1440
+1280
+960
+768
+
+Use existing backend APIs.
+
+Do not invent backend fields.
+
+============================================================
+STEP 10 — BENCHMARK + SCALE EVIDENCE
+============================================================
+
+PURPOSE:
+
+Measure actual performance instead of making unsupported scale claims.
+
+Benchmark:
+
+- 1 event
+- 100
+- 1,000
+- 10,000
+- sustained workload
+
+Measure:
+
+- events/sec
+- p50
+- p95
+- p99
+- CPU
+- memory/RSS
+- DB activity
+- Docker resources
+
+Test representative formats:
+
+- Syslog
+- CEF
+- LEEF
+- XML
+- extension-heavy events
+- malformed events
+- different payload sizes
+
+IMPORTANT:
+
+Do NOT claim that current Docker Compose deployment processes one billion events/day.
+
+Separate:
+
+MEASURED PERFORMANCE
+from
+PROJECTED ARCHITECTURAL SCALE.
+
+A future high-volume architecture can involve:
+
+- durable ingestion buffer
+- parser workers
+- partitioned storage
+- object/raw storage
+- scalable indexing
+- backpressure
+- batching
+- retention tiers
+
+but these should not be falsely claimed as already implemented.
+
+============================================================
+
+============================================================
+STEP 10B — HORIZONTAL SCALING + LOAD BALANCING
+============================================================
+
+PURPOSE:
+
+Add horizontal application scaling behind a load balancer while
+preserving the complete LogForge evidence and processing guarantees.
+
+The load-balancing layer must not change the meaning or integrity of
+any event. Every request must continue through the same LogForge
+pipeline and shared persistence path.
+
+IMPORTANT DESIGN RULES:
+
+- Do not redesign the core ingestion pipeline.
+- Do not introduce Kafka, Redis, Kubernetes, Celery, RabbitMQ,
+  OpenSearch, MinIO, a new production database, or a new production
+  queue only to implement load balancing.
+- Preserve raw-event bytes.
+- Preserve SHA-256 integrity.
+- Preserve vault storage.
+- Preserve Merkle integrity.
+- Preserve normalization and field accounting.
+- Preserve lineage and traceability.
+- Preserve drift detection and Phase 7 governance hooks.
+- Preserve idempotency and duplicate-event protection.
+
+============================================================
+LOAD BALANCING ARCHITECTURE
+============================================================
+
+                     HTTP CLIENT
+                          |
+                          v
+                  NGINX LOAD BALANCER
+                          |
+             +------------+------------+
+             |            |            |
+             v            v            v
+         Backend-1    Backend-2    Backend-3/4
+             |            |            |
+             +------------+------------+
+                          |
+                          v
+                      PostgreSQL
+
+Application replicas are stateless. PostgreSQL remains the shared
+persistence layer for all replicas.
+
+Supported deployment shapes:
+
+1. Single backend replica
+2. Two backend replicas
+3. Four backend replicas
+
+The same application image/configuration is used for each replica.
+Only the replica count changes.
+
+============================================================
+LOAD BALANCER RESPONSIBILITIES
+============================================================
+
+NGINX acts as the application entry point and distributes incoming
+HTTP requests across healthy backend replicas.
+
+The load balancer must:
+
+1. Route requests only to healthy replicas.
+2. Detect failed/unavailable upstreams.
+3. Remove unhealthy replicas from normal routing.
+4. Reintroduce replicas after successful health recovery.
+5. Preserve request payloads without modification.
+6. Expose upstream/request metrics for observability.
+7. Support graceful worker draining during shutdown.
+
+Initial deterministic routing can use round-robin with health checks.
+The routing layer must remain independent of event-processing logic.
+
+For future optimization, routing may use an adaptive load score based
+on queue depth, active requests, latency, CPU pressure, error rate and
+event complexity, but this must only replace round-robin after being
+implemented and validated.
+
+============================================================
+BACKEND WORKER FLOW
+============================================================
+
+Request
+  ↓
+Load Balancer
+  ↓
+Healthy Backend Replica
+  ↓
+Request Validation
+  ↓
+Format Detection
+  ↓
+Vendor/Format Parser
+  ↓
+Normalization
+  ↓
+Field Accounting
+  ↓
+Raw Event Preservation
+  ↓
+SHA-256 Verification
+  ↓
+Vault / Evidence Storage
+  ↓
+Merkle / Integrity Update
+  ↓
+Lineage + Audit
+  ↓
+PostgreSQL Persistence
+  ↓
+Response
+
+Every replica executes the same processing flow.
+
+============================================================
+STATELESSNESS REQUIREMENTS
+============================================================
+
+Backend replicas must not depend on replica-local state for correctness.
+
+Do not keep correctness-critical information only in:
+
+- process memory
+- local temporary state
+- local in-memory queues
+- local-only databases
+- replica-specific files
+
+Shared or deterministic sources must be used for information required
+across requests or replicas.
+
+Any temporary local state must be non-authoritative and disposable.
+
+============================================================
+FAILURE HANDLING
+============================================================
+
+If a backend replica fails:
+
+1. NGINX stops routing new requests to the failed replica.
+2. Other healthy replicas continue accepting traffic.
+3. In-flight work follows the existing application error/retry rules.
+4. Retries must remain idempotent.
+5. Duplicate delivery must not create duplicate authoritative events.
+6. The failed replica can be restarted and returned to service after
+   health validation.
+
+No failure path may bypass raw preservation or integrity verification.
+
+============================================================
+BACKPRESSURE AND QUEUE PROTECTION
+============================================================
+
+Each backend must use bounded request/worker capacity.
+
+When capacity is exhausted:
+
+- apply controlled backpressure
+- reject or defer excess work using explicit error behavior
+- avoid unbounded memory growth
+- preserve retry/idempotency semantics
+- expose saturation metrics
+
+Load balancing must distribute work; it must not hide application
+saturation.
+
+============================================================
+GRACEFUL DRAINING
+============================================================
+
+Before stopping a backend replica:
+
+1. Mark the replica as DRAINING.
+2. Stop accepting new work.
+3. Allow safe in-flight requests to finish.
+4. Flush required persistence/integrity operations.
+5. Remove the replica from normal load-balancer routing.
+6. Shut down the process.
+
+Startup must perform the existing health and database readiness checks
+before the replica becomes routable.
+
+============================================================
+ADAPTIVE LOAD DISTRIBUTION
+============================================================
+
+The production-oriented load score may combine:
+
+Load Score =
+  Queue Pressure
+  + Active Request Pressure
+  + CPU Pressure
+  + Latency Pressure
+  + Error Pressure
+  + Event Complexity Pressure
+
+The router should prefer a healthy replica with lower effective load.
+
+Weights must be configurable and observable. A replica with repeated
+errors or severe saturation must be penalized or temporarily removed.
+
+This adaptive policy must never alter event-processing semantics.
+
+============================================================
+SCALING FLOW
+============================================================
+
+Traffic Increase
+      ↓
+Observe Request Rate / Queue Depth / Latency / CPU / Errors
+      ↓
+Determine Replica Capacity
+      ↓
+Start Additional Backend Replica
+      ↓
+Run Health + Readiness Checks
+      ↓
+Register Replica with NGINX
+      ↓
+Begin Traffic Distribution
+      ↓
+Observe Load Distribution
+      ↓
+Continue / Drain / Remove Replicas as Required
+
+Scaling decisions must be based on measurable service pressure rather
+than adding infrastructure without need.
+
+============================================================
+OBSERVABILITY
+============================================================
+
+Expose and track:
+
+- requests per second
+- events per second
+- request latency
+- upstream latency
+- HTTP error rate
+- upstream failures
+- active requests
+- queue depth
+- CPU usage
+- memory usage
+- per-replica request distribution
+- database connections
+- database errors
+- persistence failures
+- integrity failures
+- duplicate-event detections
+
+The system must make it possible to identify whether the bottleneck is
+the load balancer, application workers, persistence layer or database.
+
+============================================================
+HORIZONTAL SCALING VALIDATION
+============================================================
+
+Validate the same workload through:
+
+- 1 replica
+- 2 replicas
+- 4 replicas
+
+For every configuration verify:
+
+1. Events accepted.
+2. Events persisted.
+3. Raw bytes preserved.
+4. SHA-256 values preserved.
+5. Vault records preserved.
+6. Merkle integrity remains valid.
+7. Normalized events remain correct.
+8. Lineage remains traceable.
+9. Error behavior remains consistent.
+10. No duplicate authoritative events are created.
+
+============================================================
+FAILURE-INJECTION VALIDATION
+============================================================
+
+Start multiple replicas and continuously send traffic.
+
+Then:
+
+1. Stop one backend.
+2. Verify the load balancer removes it from routing.
+3. Confirm healthy replicas continue processing.
+4. Restart the failed backend.
+5. Verify readiness.
+6. Return it to the load-balancing pool.
+7. Verify processing and integrity after recovery.
+
+============================================================
+DATABASE BOTTLENECK HANDLING
+============================================================
+
+Horizontal application scaling must not be treated as database scaling.
+
+If PostgreSQL becomes the limiting layer:
+
+- identify database CPU/connection/WAL/fsync/persistence pressure
+- avoid blindly adding application replicas
+- preserve the single shared database semantics
+- document the database as the capacity boundary
+- optimize only where the measured bottleneck justifies it
+
+Do not introduce a second production database merely to make scaling
+figures appear larger.
+
+============================================================
+INTEGRITY GATE
+============================================================
+
+Load balancing is considered correct only when distribution and
+correctness are both preserved.
+
+For the same logical workload:
+
+Input Events
+   =
+Persisted Events
+
+and:
+
+Raw Input
+   → SHA-256
+   → Vault
+   → Merkle / Integrity
+   → Lineage
+
+must remain consistent across all replicas.
+
+Throughput improvement alone is not sufficient.
+
+============================================================
+STEP 10B DESIGN PRINCIPLE
+============================================================
+
+Correctness
+   > Evidence Preservation
+   > Reliability
+   > Failure Recovery
+   > Load Distribution
+   > Raw Throughput
+
+The load balancer is an infrastructure layer around LogForge, not a
+replacement for the LogForge processing pipeline.
+
+============================================================
+
+PHASE 9 — PRODUCTION HARDENING
+============================================================
+
+Phase 9 comes AFTER Phase 8 final validation.
+
+Purpose:
+
+Move from competition/demo-ready architecture toward production/enterprise hardening.
+
+IMPORTANT:
+
+Do not introduce unnecessary infrastructure merely for appearance.
+
+Avoid automatically adding:
+
+- Kafka everywhere
+- Kubernetes
+- OpenSearch
+- MinIO
+- blockchain
+- complex multi-LLM systems
+
+unless there is a concrete requirement and implementation evidence.
+
+============================================================
+PHASE 9 AREAS
+============================================================
+
+1. PRODUCTION RUNTIME
+
+Move away from development-only runtime configuration.
+
+Harden:
+
+- process management
+- production server configuration
+- resource limits
+- health/readiness
+- graceful shutdown
+- deployment configuration
+
+============================================================
+2. AUTHENTICATION + MULTI-USER SECURITY
+
+Strengthen current RBAC.
+
+Address:
+
+- authenticated users
+- roles
+- permissions
+- maker-checker
+- replay authorization
+- administrative actions
+- session/security controls
+
+The current permissive ≤10k replay behavior should be revisited here.
+
+============================================================
+3. SIEM / EXTERNAL INTEGRATION
+
+Build actual integration contracts where required.
+
+Potentially:
+
+- outbound event forwarding
+- webhook integration
+- SIEM-compatible export
+- integration retry
+- failure handling
+- delivery status
+
+Do not claim SIEM forwarding until it is actually implemented and tested.
+
+============================================================
+4. WORM / TAMPER EVIDENCE
+
+Strengthen the existing Merkle/hash evidence system toward stronger externalized tamper evidence.
+
+Do not claim compliance-grade WORM without an actual immutable storage implementation and validation.
+
+============================================================
+5. OPERATIONAL METRICS
+
+Add meaningful production metrics:
+
+- ingestion rate
+- processing latency
+- parser success/failure
+- drift frequency
+- replay throughput
+- queue/backlog
+- database health
+- resource usage
+
+============================================================
+6. ALERTING + SLA
+
+Strengthen:
+
+- review SLA
+- drift alerts
+- parser failure alerts
+- replay failure
+- operational failures
+- escalation
+
+Alerts should be observable and auditable.
+
+============================================================
+7. CONFIGURATION + SECRETS
+============================================================
+
+Production-safe:
+
+- environment configuration
+- secret management
+- API key handling
+- rotation
+- safe defaults
+- configuration validation
+
+Never commit secrets.
+
+============================================================
+8. DATABASE OPERATIONS
+============================================================
+
+Production database hardening:
+
+- retention
+- cleanup
+- indexing
+- partitioning where justified
+- backups
+- migration safety
+- archival
+- raw evidence lifecycle
+
+============================================================
+9. RESILIENCE / FAILURE INJECTION
+============================================================
+
+Test failures such as:
+
+- parser failure
+- DB failure
+- malformed event
+- adapter failure
+- replay interruption
+- network failure
+- external service unavailable
+
+Verify that raw evidence is not silently lost.
+
+============================================================
+10. FINAL ENTERPRISE HARDENING
+============================================================
+
+Final validation of:
+
+- security
+- performance
+- reliability
+- observability
+- governance
+- integrations
+- recovery
+- documentation
+
+============================================================
+GLOBAL DESIGN PRINCIPLES
+============================================================
+
+1. NEVER silently lose raw evidence.
+
+2. AI proposes; deterministic code validates; humans approve.
+
+3. Production parsing should remain deterministic.
+
+4. Every adaptive change must be traceable.
+
+5. Every important change must be auditable.
+
+6. Rollback must be possible.
+
+7. Unknown fields must not disappear.
+
+8. Existing stable phases must not be casually rewritten.
+
+9. Do not fake enterprise capabilities.
+
+10. Clearly distinguish:
+   IMPLEMENTED
+   TESTED
+   PROJECTED
+   DEFERRED
+
+11. Prefer additive changes over rewriting frozen functionality.
+
+12. Do not modify golden test oracles merely to make tests pass.
+
+13. Do not introduce infrastructure only for presentation value.
+
+14. Preserve compatibility with previous phases.
+
+============================================================
+FINAL RULE
+============================================================
+
+Whenever modifying LogForge AI:
+
+FIRST inspect the existing implementation.
+
+THEN identify the exact phase/step affected.
+
+THEN preserve frozen functionality.
+
+THEN implement the smallest correct change.
+
+THEN test.
+
+THEN verify integrity.
+
+THEN report exactly what changed.
+
+Never claim a feature is implemented merely because it is planned in this document.
