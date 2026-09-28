@@ -205,3 +205,76 @@ class UniversalEvent(BaseModel):
     structural_fingerprint: StructuralFingerprint | None = None
     warnings: list[str] = Field(default_factory=list)
     error_message: str | None = None
+
+    @computed_field
+    @property
+    def id(self) -> str:
+        return self.event_id
+
+    @computed_field
+    @property
+    def source(self) -> str:
+        return self.adapter_id or self.vendor or "default"
+
+    @computed_field
+    @property
+    def format(self) -> str:
+        return str(self.format_detected).upper()
+
+    @computed_field
+    @property
+    def created_at(self) -> str:
+        return self.received_at.isoformat() if self.received_at else ""
+
+    @computed_field
+    @property
+    def raw_sha256(self) -> str:
+        return self.raw_hash
+
+    @computed_field
+    @property
+    def raw_text(self) -> str:
+        return self.raw_event
+
+    @computed_field
+    @property
+    def normalized(self) -> dict[str, Any]:
+        return self.normalized_event or {}
+
+    @computed_field
+    @property
+    def accounting(self) -> dict[str, Any]:
+        return {
+            "mapped_fields": list((self.normalized_event or {}).keys()),
+            "extension_fields": list((self.extensions or {}).keys()),
+            "total_input_fields": len(self.normalized_event or {}) + len(self.extensions or {}),
+        }
+
+    @computed_field
+    @property
+    def lineage(self) -> dict[str, Any]:
+        return {
+            "parser": self.processing_metadata.parser or "auto",
+            "pipeline_version": self.processing_metadata.pipeline_version,
+            "adapter_id": self.adapter_id,
+            "adapter_version": self.adapter_version or "1.0.0",
+        }
+
+    @computed_field
+    @property
+    def compact_lineage(self) -> str:
+        return f"{self.format_detected}:{self.adapter_id or 'generic'}:v{self.adapter_version or '1'}"
+
+    @computed_field
+    @property
+    def revisions(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": f"{self.event_id}-rev-1",
+                "revision": 1,
+                "kind": "ORIGINAL",
+                "created_at": self.received_at.isoformat() if self.received_at else None,
+                "adapter_id": self.adapter_id,
+            }
+        ]
+

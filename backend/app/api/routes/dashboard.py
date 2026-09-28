@@ -16,6 +16,7 @@ router = APIRouter(tags=["dashboard"])
 
 
 @router.get("/dashboard")
+@router.get("/api/dashboard")
 @router.get("/api/v1/dashboard")
 def get_dashboard(db: Session = Depends(get_db)) -> dict[str, Any]:
     f = repo.EventFilters()

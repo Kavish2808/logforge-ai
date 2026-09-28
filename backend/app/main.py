@@ -13,6 +13,7 @@ from app.api.routes import (
     alerts,
     auth,
     confidence,
+    console_api,
     dashboard,
     demo,
     drift,
@@ -138,6 +139,12 @@ app.include_router(export.router, prefix=settings.api_v1_prefix)
 app.include_router(confidence.router, prefix=settings.api_v1_prefix)
 # Phase 8 router (compact lineage, statistical/semantic drift, golden baselines)
 app.include_router(phase8.router, prefix=settings.api_v1_prefix)
+
+# Unified Console API (/api/*)
+app.include_router(console_api.router)
+app.include_router(events.router, prefix="/api", dependencies=GOVERNED)
+app.include_router(auth.router, prefix="/api")
+app.include_router(alerts.router, prefix="/api")
 
 
 @app.get("/")
