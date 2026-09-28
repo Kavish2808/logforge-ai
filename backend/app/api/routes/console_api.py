@@ -18,7 +18,7 @@ from app.api.deps import get_db
 from app.api.routes.views import get_readonly_db
 from app.config import get_settings
 from app.db.models.event import Event
-from app.db.models.governance import Alert, AuditLog, ReviewItem
+from app.db.models.governance import Alert, AuditLog
 from app.db.repository import views_repo as repo
 from app.governance import roles
 from app.governance.deps import current_actor
