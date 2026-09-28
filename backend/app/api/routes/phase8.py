@@ -1,5 +1,7 @@
 """Phase 8 APIs: compact lineage (Step 3), statistical + semantic drift
-(Step 4) and golden baselines (Step 5).
+(Step 4), golden baselines (Step 5), shadow validation (Step 6), revisions /
+replay / revision-aware rollback (Step 7) and cross-vendor drift
+correlation (Step 8).
 
 Read endpoints run in READ ONLY transactions. Every mutating endpoint is
 audited in the Phase 7 hash-chained audit log (SUCCESS / DENIED / FAILED);
@@ -20,17 +22,25 @@ from app.config import get_settings
 from app.governance import roles
 from app.governance.policy import actor_from_request
 from app.schema.phase8 import (
+    CorrelationAnalyzeRequest,
     FindingAcknowledgeRequest,
     GoldenPinRequest,
     GoldenRepinRequest,
     GoldenRetireRequest,
+    ReplayJobRequest,
+    RevisionRollbackRequest,
+    ShadowRunRequest,
     StatisticalAnalyzeRequest,
 )
 from app.services import audit_service
 from app.services.auth_service import Actor
 from app.services.phase8 import advanced_drift_service as drift_svc
 from app.services.phase8 import compact_lineage_service as lineage_svc
+from app.services.phase8 import correlation_service as correlation_svc
 from app.services.phase8 import golden_baseline_service as golden_svc
+from app.services.phase8 import replay_service as replay_svc
+from app.services.phase8 import revision_service as revision_svc
+from app.services.phase8 import shadow_service as shadow_svc
 
 router = APIRouter(tags=["phase8"])
 
@@ -264,3 +274,170 @@ def retire_golden_baseline(source_key: str, body: GoldenRetireRequest, request: 
 
     return _golden_change(db, request, "GOLDEN_BASELINE_RETIRE", source_key, body.note,
                           {"request": body.model_dump(mode="json")}, change)
+
+
+# --------------------------------------------------------------------------
+# Step 6: shadow validation
+# --------------------------------------------------------------------------
+
+
+@router.post("/shadow/runs", status_code=201)
+def create_shadow_run(body: ShadowRunRequest, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    action = "SHADOW_RUN"
+    actor = _operational(db, request, action, "learning_session", body.learning_session_id, roles.REVIEW)
+    try:
+        run = shadow_svc.run_for_session(db, body.learning_session_id, actor=actor.username)
+    except shadow_svc.ShadowError as exc:
+        raise _deny(db, actor, action, "learning_session", body.learning_session_id, exc.status, exc.message)
+    _audit(db, actor, action, "learning_session", body.learning_session_id, audit_service.SUCCESS,
+           {"shadow_run_id": run.id, "verdict": run.verdict, "breaker_tripped": run.breaker_tripped,
+            "reasons": [r.get("code") for r in run.reasons], "sample_count": run.sample_count,
+            "proposal_version": run.proposal_version}, f"shadow_run:{run.id}")
+    return shadow_svc.run_dict(run)
+
+
+@router.get("/shadow/runs")
+def list_shadow_runs(learning_session_id: str = Query(..., max_length=26),
+                     db: Session = Depends(get_readonly_db)) -> dict[str, Any]:
+    return {"items": shadow_svc.list_runs(db, learning_session_id)}
+
+
+@router.get("/shadow/runs/{run_id}")
+def get_shadow_run(run_id: str, db: Session = Depends(get_readonly_db)) -> dict[str, Any]:
+    try:
+        return shadow_svc.run_dict(shadow_svc.get_run(db, run_id))
+    except shadow_svc.ShadowError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+
+
+# --------------------------------------------------------------------------
+# Step 7: revisions, replay jobs, revision-aware rollback
+# --------------------------------------------------------------------------
+
+
+@router.get("/revisions/{event_id}")
+def event_revisions(event_id: str, db: Session = Depends(get_readonly_db)) -> dict[str, Any]:
+    try:
+        return revision_svc.history(db, event_id)
+    except revision_svc.RevisionNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/replay/jobs", status_code=201)
+def create_replay_job(body: ReplayJobRequest, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    action = "REPLAY_JOB_CREATE"
+    actor = _operational(db, request, action, "replay_job", None, roles.REVIEW)
+    rate = body.rate_per_sec or (body.rate_per_minute / 60 if body.rate_per_minute else replay_svc.DEFAULT_RATE_PER_SEC)
+    try:
+        job = replay_svc.create(db, adapter_id=body.adapter_id, reason=body.reason, actor=actor,
+                                from_version=body.from_version, window_start=body.window_start,
+                                window_end=body.window_end, rate_per_sec=rate, batch_size=body.batch_size)
+    except replay_svc.ReplayError as exc:
+        raise _deny(db, actor, action, "replay_job", None, exc.status, exc.message,
+                    {"request": body.model_dump(mode="json")})
+    db.commit()
+    _audit(db, actor, action, "replay_job", job.id, audit_service.SUCCESS,
+           {"request": body.model_dump(mode="json"), "total": job.total, "status": job.status,
+            "large_replay": job.total > replay_svc.LARGE_REPLAY_THRESHOLD}, f"replay_job:{job.id}")
+    return replay_svc.job_dict(job)
+
+
+@router.get("/replay/jobs")
+def list_replay_jobs(limit: int = Query(default=50, ge=1, le=200), db: Session = Depends(get_readonly_db)) -> dict[str, Any]:
+    return {"items": replay_svc.list_jobs(db, limit=limit)}
+
+
+@router.get("/replay/jobs/{job_id}")
+def get_replay_job(job_id: str, db: Session = Depends(get_readonly_db)) -> dict[str, Any]:
+    try:
+        return replay_svc.job_dict(replay_svc.get(db, job_id))
+    except replay_svc.ReplayError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+
+
+def _job_transition(db: Session, request: Request, job_id: str, action: str, change) -> dict[str, Any]:
+    actor = _operational(db, request, action, "replay_job", job_id, roles.REVIEW)
+    try:
+        job = replay_svc.get(db, job_id)
+        before = job.status
+        change(job, actor)
+    except replay_svc.ReplayError as exc:
+        raise _deny(db, actor, action, "replay_job", job_id, exc.status, exc.message)
+    db.commit()
+    _audit(db, actor, action, "replay_job", job_id, audit_service.SUCCESS,
+           {"from_status": before, "to_status": job.status, "processed": job.processed, "total": job.total},
+           f"replay_job:{job_id}")
+    return replay_svc.job_dict(job)
+
+
+@router.post("/replay/jobs/{job_id}/start")
+def start_replay_job(job_id: str, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _job_transition(db, request, job_id, "REPLAY_JOB_START", lambda j, a: replay_svc.start(db, j, actor=a))
+
+
+@router.post("/replay/jobs/{job_id}/pause")
+def pause_replay_job(job_id: str, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _job_transition(db, request, job_id, "REPLAY_JOB_PAUSE", lambda j, a: replay_svc.pause(j))
+
+
+@router.post("/replay/jobs/{job_id}/resume")
+def resume_replay_job(job_id: str, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _job_transition(db, request, job_id, "REPLAY_JOB_RESUME", lambda j, a: replay_svc.resume(j))
+
+
+@router.post("/replay/jobs/{job_id}/cancel")
+def cancel_replay_job(job_id: str, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return _job_transition(db, request, job_id, "REPLAY_JOB_CANCEL", lambda j, a: replay_svc.cancel(j))
+
+
+@router.post("/replay/rollback/{adapter_id}")
+def revision_rollback(adapter_id: str, body: RevisionRollbackRequest, request: Request,
+                      db: Session = Depends(get_db)) -> dict[str, Any]:
+    action = "REVISION_ROLLBACK"
+    actor = _operational(db, request, action, "adapter", adapter_id, roles.ROLLBACK)
+    try:
+        result = replay_svc.rollback(db, adapter_id, reason=body.reason, actor=actor, replay=body.replay,
+                                     rate_per_sec=body.rate_per_sec, batch_size=body.batch_size)
+    except replay_svc.ReplayError as exc:
+        raise _deny(db, actor, action, "adapter", adapter_id, exc.status, exc.message,
+                    {"request": body.model_dump(mode="json")})
+    except Exception as exc:
+        db.rollback()
+        _audit(db, actor, action, "adapter", adapter_id, audit_service.FAILED,
+               {"request": body.model_dump(mode="json"), "error": type(exc).__name__})
+        raise
+    _audit(db, actor, action, "adapter", adapter_id, audit_service.SUCCESS,
+           {"request": body.model_dump(mode="json"), "before": result["before"], "after": result["after"],
+            "replay_job_id": (result["replay_job"] or {}).get("id")}, f"adapter:{adapter_id}")
+    return result
+
+
+# --------------------------------------------------------------------------
+# Step 8: cross-vendor drift correlation
+# --------------------------------------------------------------------------
+
+
+@router.post("/drift/correlations/analyze")
+def analyze_correlations(body: CorrelationAnalyzeRequest, request: Request,
+                         db: Session = Depends(get_db)) -> dict[str, Any]:
+    action = "DRIFT_CORRELATION_ANALYZE"
+    actor = _operational(db, request, action, "drift_correlations", None, roles.REVIEW)
+    report = correlation_svc.analyze(db, window_end=body.window_end, window_minutes=body.window_minutes)
+    _audit(db, actor, action, "drift_correlations", None, audit_service.SUCCESS,
+           {"window": report["window"], "correlations": [c["id"] for c in report["correlations"]]})
+    return report
+
+
+@router.get("/drift/correlations")
+def list_correlations(status: Literal["OPEN", "REVIEWED", "DISMISSED"] | None = None,
+                      limit: int = Query(default=100, ge=1, le=500),
+                      db: Session = Depends(get_readonly_db)) -> dict[str, Any]:
+    return {"items": correlation_svc.list_correlations(db, status=status, limit=limit)}
+
+
+@router.get("/drift/correlations/{correlation_id}")
+def get_correlation(correlation_id: str, db: Session = Depends(get_readonly_db)) -> dict[str, Any]:
+    try:
+        return correlation_svc.get(db, correlation_id)
+    except correlation_svc.CorrelationNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

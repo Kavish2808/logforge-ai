@@ -1,5 +1,6 @@
 """Application configuration, loaded from environment variables / .env."""
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -104,6 +105,10 @@ class Settings(BaseSettings):
     # ---- Phase 8: scale, advanced adaptation and resilience (additive) ----
     # false = register no Phase 8 guard / scheduler step / persist hook (Phase 7 behavior).
     phase8_enabled: bool = True
+    # Step 6 shadow gate on learning activation: "off" | "if_present" (a shadow run
+    # for the current proposal governs activation; none = Phase 6 behavior) |
+    # "required" (activation needs a PASSED run, or SOC_ADMIN review for REVIEW_REQUIRED).
+    phase8_shadow_gate: Literal["off", "if_present", "required"] = "if_present"
 
     @property
     def is_production(self) -> bool:

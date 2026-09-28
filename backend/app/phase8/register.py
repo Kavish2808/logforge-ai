@@ -35,13 +35,34 @@ def _compact_lineage_backfill(db):
     return compact_lineage_service.backfill(db)
 
 
+def _shadow_gate(ctx):
+    from app.services.phase8 import shadow_service
+
+    return shadow_service.gate(ctx)
+
+
+def _revision_hook(db, event, reprocessed):
+    from app.services.phase8 import revision_service
+
+    revision_service.persist_hook(db, event, reprocessed)
+
+
+def _replay_worker(db):
+    from app.services.phase8 import replay_service
+
+    return replay_service.worker_step(db)
+
+
 # (name, actions, fn) / (name, fn) — filled in by the Phase 8 pillars.
 GUARDS: list[tuple[str, tuple[str, ...], object]] = [
     ("golden_poisoning", ("DRIFT_ADD_VARIANT", "DRIFT_REPLACE_BASELINE", "LEARNING_ACTIVATE", "LEARNING_APPROVE"),
      _golden_guard),
+    ("shadow_gate", ("LEARNING_ACTIVATE", "LEARNING_APPROVE"), _shadow_gate),
 ]
-STEPS: list[tuple[str, object]] = [("compact_lineage_backfill", _compact_lineage_backfill)]
-PERSIST_HOOKS: list[tuple[str, object]] = [("compact_lineage", _compact_lineage_hook)]
+STEPS: list[tuple[str, object]] = [("compact_lineage_backfill", _compact_lineage_backfill),
+                                   ("replay_worker", _replay_worker)]
+PERSIST_HOOKS: list[tuple[str, object]] = [("compact_lineage", _compact_lineage_hook),
+                                           ("event_revisions", _revision_hook)]
 
 
 def register_all() -> dict[str, list[str]]:

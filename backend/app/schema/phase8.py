@@ -36,3 +36,34 @@ class GoldenRepinRequest(GoldenPinRequest):
 class GoldenRetireRequest(BaseModel):
     note: str = Field(default="", max_length=2000)
     expected_version: int | None = Field(default=None, ge=1)
+
+
+# --- Steps 6-8 -------------------------------------------------------------------------------------------
+
+
+class ShadowRunRequest(BaseModel):
+    learning_session_id: str = Field(..., min_length=1, max_length=26)
+
+
+class ReplayJobRequest(BaseModel):
+    adapter_id: str = Field(..., min_length=1, max_length=128, description="Source (adapter id) whose events are replayed.")
+    reason: str = Field(default="", max_length=2000, description="Required, non-empty.")
+    from_version: str | None = Field(default=None, max_length=32,
+                                     description="Only events processed with this adapter version (default: any).")
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+    rate_per_sec: float | None = Field(default=None, gt=0, le=1000)
+    rate_per_minute: float | None = Field(default=None, gt=0, le=60000)
+    batch_size: int = Field(default=100, ge=1, le=1000)
+
+
+class RevisionRollbackRequest(BaseModel):
+    reason: str = Field(default="", max_length=2000, description="Required, non-empty.")
+    replay: bool = Field(default=True, description="Queue a ROLLBACK replay job (PENDING; started explicitly).")
+    rate_per_sec: float = Field(default=50.0, gt=0, le=1000)
+    batch_size: int = Field(default=100, ge=1, le=1000)
+
+
+class CorrelationAnalyzeRequest(BaseModel):
+    window_end: datetime | None = Field(default=None, description="Default: now, truncated to the minute.")
+    window_minutes: int = Field(default=60, ge=5, le=24 * 60)

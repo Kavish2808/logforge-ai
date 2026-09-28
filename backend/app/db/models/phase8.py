@@ -139,6 +139,11 @@ class DriftCorrelation(Base):
 
 # --- shadow validation ------------------------------------------------------------------------------
 
+SHADOW_RUNNING = "RUNNING"
+SHADOW_PASSED = "PASSED"
+SHADOW_REVIEW_REQUIRED = "REVIEW_REQUIRED"
+SHADOW_BLOCKED = "BLOCKED"
+
 
 class ShadowRun(Base):
     """Stratified old-vs-new comparison for one learning proposal. The learning
@@ -169,7 +174,8 @@ class ShadowRun(Base):
 
 # --- revision-aware replay ------------------------------------------------------------------------------
 
-REPLAY_PENDING_APPROVAL = "PENDING_APPROVAL"
+REPLAY_PENDING = "PENDING"
+REPLAY_PENDING_APPROVAL = "PENDING_APPROVAL"  # > 10,000 events: a second authorized actor must start it
 REPLAY_RUNNING = "RUNNING"
 REPLAY_PAUSED = "PAUSED"
 REPLAY_COMPLETED = "COMPLETED"
