@@ -1,0 +1,444 @@
+{
+  "sections": {
+    "Startup": [
+      {
+        "name": "Backend Readiness Endpoint (/api/health/readiness)",
+        "status": "PASS",
+        "detail": {
+          "status": "ready",
+          "database": "ready",
+          "ready": true
+        }
+      },
+      {
+        "name": "Backend Health Endpoint (/health)",
+        "status": "PASS",
+        "detail": {
+          "status": "ok",
+          "live": true
+        }
+      },
+      {
+        "name": "Frontend HTTP Reachability (port 5173)",
+        "status": "PASS",
+        "detail": "Length: 786"
+      },
+      {
+        "name": "PostgreSQL Direct Connectivity & Tables Count",
+        "status": "PASS",
+        "detail": "Tables found: 29"
+      }
+    ],
+    "Auth": [
+      {
+        "name": "Admin Login (/api/auth/login)",
+        "status": "PASS",
+        "detail": "Token acquired: True, role: SOC_ADMIN"
+      },
+      {
+        "name": "Verify Identity (/api/auth/me)",
+        "status": "PASS",
+        "detail": {
+          "username": "admin",
+          "role": "SOC_ADMIN",
+          "authenticated": true,
+          "capabilities": [
+            "inspect",
+            "review",
+            "propose",
+            "export",
+            "approve_adapter",
+            "approve_drift",
+            "approve_learning",
+            "rollback",
+            "governance",
+            "manage_roles",
+            "critical_approval"
+          ],
+          "rbac_mode": "permissive"
+        }
+      },
+      {
+        "name": "Bad Credentials Handled Safely",
+        "status": "FAIL",
+        "detail": "Status code: 500"
+      }
+    ],
+    "Dashboard": [
+      {
+        "name": "Dashboard Payload (/api/dashboard)",
+        "status": "FAIL",
+        "detail": "Counts: {}"
+      }
+    ],
+    "Ingest": [
+      {
+        "name": "Format: JSON Ingestion",
+        "status": "PASS",
+        "detail": "ID: 01M3MWMD1Z524EF4Z2HPP2Z0A5, status: SUCCESS"
+      },
+      {
+        "name": "Format: Syslog RFC3164 Ingestion",
+        "status": "PASS",
+        "detail": "ID: 01M3MWMKJGRX3YJGMMHMQ72DAE, format: syslog"
+      },
+      {
+        "name": "Format: CEF Ingestion",
+        "status": "PASS",
+        "detail": "ID: 01M3MWMNYE192TYTADXDFZPV4D, format: cef"
+      },
+      {
+        "name": "Format: LEEF Ingestion",
+        "status": "PASS",
+        "detail": "ID: 01M3MWMSAS4D57D1JE4XJBPAE0, format: leef"
+      },
+      {
+        "name": "Format: XML Ingestion",
+        "status": "PASS",
+        "detail": "ID: 01M3MWMWC2T8HAB21T50MK8YKY, format: xml"
+      },
+      {
+        "name": "Demo Batch Ingest (/ingest/demo)",
+        "status": "FAIL",
+        "detail": "timed out"
+      },
+      {
+        "name": "Extension-Heavy Log Handling",
+        "status": "PASS",
+        "detail": "Extensions preserved: 26"
+      },
+      {
+        "name": "Malformed JSON Ingestion Safe Fallback",
+        "status": "PASS",
+        "detail": {
+          "event_id": "01M3MWNAQDWF361X7CDZHGH6GR",
+          "raw_event": "{not valid json: 'missing quote",
+          "raw_hash": "563df2b197f79cd388218860f7da77754c488bb985550a00a5a7f6a9e9fe46d9",
+          "received_at": "2026-09-28T20:52:48.503051Z",
+          "processed_at": "2026-09-28T20:52:48.503215Z",
+          "event_timestamp": null,
+          "format_detected": "unknown",
+          "vendor": null,
+          "product": null,
+          "product_version": null,
+          "adapter_id": null,
+          "adapter_version": null,
+          "ocsf_class_uid": null,
+          "ocsf_class_name": null,
+          "ocsf_category_uid": null,
+          "ocsf_category_name": null,
+          "event_type": null,
+          "event_action": null,
+          "severity": null,
+          "severity_id": null,
+          "status": "FAILED",
+          "network": {
+            "src_ip": null,
+            "dst_ip": null,
+            "src_port": null,
+            "dst_port": null,
+            "protocol": null,
+            "direction": null
+          },
+          "user": {
+            "name": null,
+            "uid": null,
+            "domain": null
+          },
+          "process": {
+            "name": null,
+            "pid": null,
+            "path": null,
+            "cmd_line": null
+          },
+          "extensions": {},
+          "normalized_event": null,
+          "processing_metadata": {
+            "parser": null,
+            "pipeline_version": "0.1.0",
+            "duration_ms": null,
+            "adapter_source": null,
+            "drift": null,
+            "extension_spill": null
+          },
+          "structural_fingerprint": null,
+          "warnings": [],
+          "error_message": "Could not detect a known log format (syslog/json/cef).",
+          "id": "01M3MWNAQDWF361X7CDZHGH6GR",
+          "source": "default",
+          "format": "UNKNOWN",
+          "created_at": "2026-09-28T20:52:48.503051+00:00",
+          "raw_sha256": "563df2b197f79cd388218860f7da77754c488bb985550a00a5a7f6a9e9fe46d9",
+          "raw_text": "{not valid json: 'missing quote",
+          "normalized": {},
+          "accounting": {
+            "mapped_fields": [],
+            "extension_fields": [],
+            "total_input_fields": 0
+          },
+          "lineage": {
+            "parser": "auto",
+            "pipeline_version": "0.1.0",
+            "adapter_id": null,
+            "adapter_version": "1.0.0"
+          },
+          "compact_lineage": "unknown:generic:v1",
+          "revisions": [
+            {
+              "id": "01M3MWNAQDWF361X7CDZHGH6GR-rev-1",
+              "revision": 1,
+              "kind": "ORIGINAL",
+              "created_at": "2026-09-28T20:52:48.503051+00:00",
+              "adapter_id": null
+            }
+          ]
+        }
+      },
+      {
+        "name": "Unsafe XML XXE Probe Rejection / Sanitization",
+        "status": "PASS",
+        "detail": "Status: 201, response: {'event_id': '01M3MWNDVZ6JFPAR760T24BC88', 'raw_event': '<!D"
+      },
+      {
+        "name": "Duplicate Event Ingestion Handling",
+        "status": "PASS",
+        "detail": "First: 01M3MWNH0HF518JR0AM1H0PCVZ, Second: 01M3MWNHRMBCK10F7B0HA7DQK0"
+      }
+    ],
+    "Events": [
+      {
+        "name": "Event Listing & Pagination (/api/events)",
+        "status": "PASS",
+        "detail": "Total events: 105, Page items: 10"
+      }
+    ],
+    "Forensics": [
+      {
+        "name": "Forensics Verification (/api/events/01M3MWNHRMBCK10F7B0HA7DQK0)",
+        "status": "PASS",
+        "detail": {
+          "raw_sha256": "186347520eaa0d4f4a524b6935b2e861adbefcbee3792da492159600df086df7",
+          "has_normalized": true,
+          "has_lineage": true,
+          "has_accounting": true,
+          "has_revisions": true
+        }
+      }
+    ],
+    "Sources": [
+      {
+        "name": "Source Intelligence Discovery (/api/sources)",
+        "status": "FAIL",
+        "detail": "Sources discovered: 0"
+      }
+    ],
+    "Drift": [
+      {
+        "name": "Structural Drift Queue (/api/drift)",
+        "status": "PASS",
+        "detail": "Pending drift signals: 0"
+      },
+      {
+        "name": "Statistical Drift Signals (/api/drift/statistical)",
+        "status": "PASS",
+        "detail": "Findings count: 0"
+      },
+      {
+        "name": "Cross-Source Correlations (/api/correlations)",
+        "status": "PASS",
+        "detail": "Correlations count: 0"
+      }
+    ],
+    "Learning": [
+      {
+        "name": "Adapter Registry & Shipped Adapters (/api/adapters)",
+        "status": "PASS",
+        "detail": "Shipped: 8"
+      },
+      {
+        "name": "Propose Declarative Adapter (/api/adapters/propose)",
+        "status": "PASS",
+        "detail": {
+          "id": "learned-1790628783",
+          "vendor": "Acme Edge",
+          "source": "acme-edge",
+          "version": 1,
+          "state": "PROPOSED",
+          "origin": "learned",
+          "created_at": "2026-09-28T20:53:03.444819+00:00",
+          "samples_count": 2,
+          "validation": {
+            "match_rate": 1.0,
+            "status": "PENDING"
+          }
+        }
+      },
+      {
+        "name": "Validate Adapter Sandbox (/validate)",
+        "status": "PASS",
+        "detail": {
+          "id": "learned-1790628783",
+          "state": "VALIDATED",
+          "validation": {
+            "match_rate": 1.0,
+            "status": "PASSED"
+          }
+        }
+      },
+      {
+        "name": "Shadow Test Adapter (/shadow)",
+        "status": "PASS",
+        "detail": {
+          "id": "learned-1790628783",
+          "state": "VALIDATED",
+          "shadow": {
+            "outcome": "PASSED",
+            "status": "COMPLETED"
+          }
+        }
+      },
+      {
+        "name": "Approve Adapter (/approve)",
+        "status": "PASS",
+        "detail": {
+          "id": "learned-1790628783",
+          "state": "APPROVED"
+        }
+      },
+      {
+        "name": "Activate Adapter (/activate)",
+        "status": "PASS",
+        "detail": {
+          "id": "learned-1790628783",
+          "state": "ACTIVE"
+        }
+      }
+    ],
+    "Replay": [
+      {
+        "name": "List Replay Jobs (/api/replays)",
+        "status": "PASS",
+        "detail": "Jobs: 0"
+      },
+      {
+        "name": "Create Revision-Aware Replay Job",
+        "status": "PASS",
+        "detail": {
+          "id": "replay-1790628784",
+          "source": "default",
+          "status": "RUNNING",
+          "processed": 0,
+          "total": 100,
+          "created_at": "2026-09-28T20:53:04.256812+00:00"
+        }
+      },
+      {
+        "name": "Pause Replay Control",
+        "status": "PASS",
+        "detail": {
+          "id": "replay-1790628784",
+          "status": "PAUSED"
+        }
+      },
+      {
+        "name": "Resume Replay Control",
+        "status": "PASS",
+        "detail": {
+          "id": "replay-1790628784",
+          "status": "RUNNING"
+        }
+      }
+    ],
+    "Integrity": [
+      {
+        "name": "Merkle Chain & Evidence Integrity (/api/integrity)",
+        "status": "PASS",
+        "detail": {
+          "valid": true,
+          "audit_valid": true,
+          "total": 105,
+          "failures": []
+        }
+      }
+    ],
+    "Audit": [
+      {
+        "name": "Hash-Chained Audit Trail (/api/audit)",
+        "status": "PASS",
+        "detail": "Audit records: 9"
+      }
+    ],
+    "Alerts": [
+      {
+        "name": "Operational Alerts Listing (/api/alerts)",
+        "status": "PASS",
+        "detail": "Alert count: 0"
+      }
+    ],
+    "Governance": [
+      {
+        "name": "Maker-Checker Review Queue (/api/reviews)",
+        "status": "PASS",
+        "detail": "Pending reviews: 0"
+      }
+    ],
+    "Export": [
+      {
+        "name": "Evidence Export NDJSON Streaming (/api/export?format=ndjson)",
+        "status": "PASS",
+        "detail": "Lines received: 5"
+      },
+      {
+        "name": "Evidence Export JSON Array (/api/export?format=json)",
+        "status": "PASS",
+        "detail": "Records received: 5"
+      }
+    ],
+    "Security": [
+      {
+        "name": "SQL Injection Probe Handled Safely",
+        "status": "PASS",
+        "detail": "Parameterized SQL safe"
+      },
+      {
+        "name": "Path Traversal Probe Handled Safely",
+        "status": "PASS",
+        "detail": "Blocked with status 404"
+      },
+      {
+        "name": "Oversized Payload Rejection (Capacity Gate)",
+        "status": "PASS",
+        "detail": "Blocked with status 422"
+      }
+    ],
+    "Database": [
+      {
+        "name": "Database Events Count matches System Activity",
+        "status": "PASS",
+        "detail": "Persisted events in DB: 105"
+      },
+      {
+        "name": "Raw Vault Objects Verbatim Preservation",
+        "status": "PASS",
+        "detail": "Vault objects: 105"
+      },
+      {
+        "name": "Audit Log Records Maintained",
+        "status": "PASS",
+        "detail": "Audit entries: 9"
+      },
+      {
+        "name": "Source Baselines Persisted",
+        "status": "PASS",
+        "detail": "Baselines: 1"
+      }
+    ]
+  },
+  "counts": {
+    "total": 47,
+    "passed": 43,
+    "failed": 4,
+    "skipped": 0
+  },
+  "evidence": {}
+}

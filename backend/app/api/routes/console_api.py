@@ -58,33 +58,43 @@ def get_sources_and_baselines(db: Session = Depends(get_db)) -> dict[str, Any]:
     rows = (
         db.execute(
             select(
-                func.coalesce(Event.adapter_id, Event.vendor, "default").label("source"),
+                Event.adapter_id,
                 Event.vendor,
                 func.count().label("event_count"),
             )
-            .group_by(func.coalesce(Event.adapter_id, Event.vendor, "default"), Event.vendor)
+            .group_by(Event.adapter_id, Event.vendor)
         )
         .all()
     )
 
-    baselines_by_source = {b["source_key"]: b for b in drift_service.list_baselines(db)}
-    active_goldens = {g["source_key"]: g for g in golden_svc.list_active(db)}
+    baselines_by_source = {}
+    for b in drift_service.list_baselines(db):
+        k = getattr(b, "source_key", None) or (b.get("source_key") if isinstance(b, dict) else None)
+        if k:
+            baselines_by_source[k] = b
+
+    active_goldens = {}
+    for g in golden_svc.list_active(db):
+        k = getattr(g, "source_key", None) or (g.get("source_key") if isinstance(g, dict) else None)
+        if k:
+            active_goldens[k] = g
 
     items = []
     seen = set()
-    for source_name, vendor, count in rows:
-        seen.add(source_name)
-        b = baselines_by_source.get(source_name)
-        g = active_goldens.get(source_name)
-        items.append({
-            "id": source_name,
-            "name": source_name,
-            "vendor": vendor or "Generic",
-            "event_count": count,
-            "baseline": b,
-            "golden": bool(g),
-        })
-
+    for adapter_id, vendor, count in rows:
+        source_name = adapter_id or vendor or "default"
+        if source_name not in seen:
+            seen.add(source_name)
+            b = baselines_by_source.get(source_name)
+            g = active_goldens.get(source_name)
+            items.append({
+                "id": source_name,
+                "name": source_name,
+                "vendor": vendor or "Generic",
+                "event_count": count,
+                "baseline": b,
+                "golden": bool(g),
+            })
     # Also include baselines that might not have events yet
     for source_key, b in baselines_by_source.items():
         if source_key not in seen:
@@ -254,7 +264,7 @@ SHIPPED_ADAPTERS = [
 @router.get("/adapters")
 def list_adapters(db: Session = Depends(get_db)) -> dict[str, Any]:
     from app.db.repository import learning_repo
-    sessions, _ = learning_repo.list_sessions(db, limit=100)
+    sessions, _ = learning_repo.list_sessions(db, source_key=None, status=None, limit=100, offset=0)
     items = []
     for s in sessions:
         items.append({
