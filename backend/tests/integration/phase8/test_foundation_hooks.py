@@ -253,6 +253,9 @@ def test_no_persist_hooks_means_no_hook_savepoint_and_identical_rows(client):
     # Phase 3 (runtime_registry) and Phase 5 (drift evaluate) already issue their own
     # savepoints during ingest; those are pre-existing and unchanged. The Phase 8
     # hook path must add none when nothing is registered, and exactly one per hook.
+    # Phase 8 pillars register their own hooks (Step 3: compact lineage); start from
+    # the unregistered (Phase 7) state explicitly — the fixture re-registers afterwards.
+    p8.unregister_all()
     assert evidence_service._PERSIST_HOOKS == []
     e, origins = _savepoint_origins(client, '{"user":"a","action":"login"}')
     assert not any("_run_persist_hooks" in o for o in origins)

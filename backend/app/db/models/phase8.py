@@ -27,6 +27,7 @@ from app.db.base import Base
 
 GOLDEN_ACTIVE = "ACTIVE"
 GOLDEN_SUPERSEDED = "SUPERSEDED"
+GOLDEN_RETIRED = "RETIRED"  # explicitly withdrawn by a SOC_ADMIN; kept for audit
 
 
 class GoldenBaseline(Base):

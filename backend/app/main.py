@@ -23,6 +23,7 @@ from app.api.routes import (
     integrity,
     learning,
     onboarding,
+    phase8,
     views,
 )
 from app.config import get_settings
@@ -131,6 +132,8 @@ app.include_router(integrity.router, prefix=settings.api_v1_prefix)
 app.include_router(alerts.router, prefix=settings.api_v1_prefix)
 app.include_router(export.router, prefix=settings.api_v1_prefix)
 app.include_router(confidence.router, prefix=settings.api_v1_prefix)
+# Phase 8 router (compact lineage, statistical/semantic drift, golden baselines)
+app.include_router(phase8.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

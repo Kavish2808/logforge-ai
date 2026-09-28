@@ -12,10 +12,36 @@ from __future__ import annotations
 
 from app.config import get_settings
 
+
+# Thin wrappers: the Phase 8 services are imported lazily, so importing this
+# module (from app.main) never creates an import cycle with the Phase 7 core.
+
+
+def _golden_guard(ctx):
+    from app.services.phase8 import golden_baseline_service
+
+    return golden_baseline_service.guard(ctx)
+
+
+def _compact_lineage_hook(db, event, reprocessed):
+    from app.services.phase8 import compact_lineage_service
+
+    compact_lineage_service.persist_hook(db, event, reprocessed)
+
+
+def _compact_lineage_backfill(db):
+    from app.services.phase8 import compact_lineage_service
+
+    return compact_lineage_service.backfill(db)
+
+
 # (name, actions, fn) / (name, fn) — filled in by the Phase 8 pillars.
-GUARDS: list[tuple[str, tuple[str, ...], object]] = []
-STEPS: list[tuple[str, object]] = []
-PERSIST_HOOKS: list[tuple[str, object]] = []
+GUARDS: list[tuple[str, tuple[str, ...], object]] = [
+    ("golden_poisoning", ("DRIFT_ADD_VARIANT", "DRIFT_REPLACE_BASELINE", "LEARNING_ACTIVATE", "LEARNING_APPROVE"),
+     _golden_guard),
+]
+STEPS: list[tuple[str, object]] = [("compact_lineage_backfill", _compact_lineage_backfill)]
+PERSIST_HOOKS: list[tuple[str, object]] = [("compact_lineage", _compact_lineage_hook)]
 
 
 def register_all() -> dict[str, list[str]]:
