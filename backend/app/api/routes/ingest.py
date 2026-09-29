@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.governance.deps import require_ingest
-from app.schema.ingest import MAX_BATCH_SIZE, BatchIngestRequest, BatchIngestResponse, IngestRequest
+from app.schema.ingest import MAX_BATCH_SIZE, MAX_RAW_LOG_LENGTH, BatchIngestRequest, BatchIngestResponse, IngestRequest
 from app.schema.ocsf import UniversalEvent
 from app.services import ingestion_service
 
@@ -23,7 +23,7 @@ class _ConsoleEvent(BaseModel):
 
 class _ConsoleIngestRequest(BaseModel):
     source: str = "default"
-    events: list[_ConsoleEvent | str] = Field(..., max_length=MAX_BATCH_SIZE)
+    events: list[_ConsoleEvent | str] = Field(..., max_length=10000)
 
 
 def _validate(model: type[BaseModel], data: bytes | dict) -> Any:
@@ -40,10 +40,48 @@ def _validate(model: type[BaseModel], data: bytes | dict) -> Any:
 @router.post("/api/v1/ingest", status_code=201)
 async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
     raw_body = await request.body()
+    content_type = request.headers.get("content-type", "").lower()
+    source_header = request.headers.get("x-logforge-source") or request.headers.get("x-source") or "default"
+
+    body: Any = None
     try:
         body = json.loads(raw_body)
-    except ValueError as exc:
-        raise RequestValidationError([{"loc": ("body",), "msg": "Invalid JSON body", "type": "json_invalid"}]) from exc
+    except (ValueError, UnicodeDecodeError):
+        # Handle raw CSV, TSV, or plain text log streams directly
+        text_content = raw_body.decode("utf-8", errors="replace").strip()
+        if text_content and ("\n" in text_content or "," in text_content or "csv" in content_type or "plain" in content_type):
+            raw_lines = [line.strip() for line in text_content.splitlines() if line.strip()]
+            if raw_lines:
+                for idx, line in enumerate(raw_lines):
+                    if len(line) > MAX_RAW_LOG_LENGTH:
+                        raise RequestValidationError([{"loc": ("body", idx), "msg": f"Line exceeds maximum length of {MAX_RAW_LOG_LENGTH}", "type": "string_too_long"}])
+                    if "\x00" in line:
+                        raise RequestValidationError([{"loc": ("body", idx), "msg": "Line contains NUL byte", "type": "value_error"}])
+                
+                total_accepted = 0
+                all_results = []
+                s_count, p_count, f_count = 0, 0, 0
+                chunk_size = 1000
+                for i in range(0, len(raw_lines), chunk_size):
+                    chunk = raw_lines[i:i + chunk_size]
+                    outcome = ingestion_service.ingest_batch(db, chunk, source=source_header)
+                    total_accepted += len(outcome.results)
+                    s_count += outcome.success_count
+                    p_count += outcome.partial_count
+                    f_count += outcome.failed_count
+                    all_results.extend(outcome.results)
+
+                return {
+                    "accepted": total_accepted,
+                    "duplicates": 0,
+                    "total": len(raw_lines),
+                    "success_count": s_count,
+                    "partial_count": p_count,
+                    "failed_count": f_count,
+                    "results": all_results,
+                }
+        raise RequestValidationError([{"loc": ("body",), "msg": "Invalid JSON or CSV body", "type": "json_invalid"}])
+
     if isinstance(body, dict) and "events" in body:
         # Flexible multi-event format from console
         console = _validate(_ConsoleIngestRequest, raw_body)
@@ -51,22 +89,54 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
         raw_lines = [line for line in raw_lines if line]
         if not raw_lines:
             return {"accepted": 0, "duplicates": 0, "total": 0}
-        # Each line gets the same boundary checks as a single raw_log (length, NUL bytes).
-        _validate(BatchIngestRequest, {"logs": [{"raw_log": line} for line in raw_lines]})
-        outcome = ingestion_service.ingest_batch(db, raw_lines, source=getattr(console, "source", None))
+
+        for idx, line in enumerate(raw_lines):
+            if len(line) > MAX_RAW_LOG_LENGTH:
+                raise RequestValidationError([{"loc": ("body", "events", idx), "msg": f"Log line exceeds maximum length of {MAX_RAW_LOG_LENGTH}", "type": "string_too_long"}])
+            if "\x00" in line:
+                raise RequestValidationError([{"loc": ("body", "events", idx), "msg": "Log line contains NUL byte", "type": "value_error"}])
+
+        source_name = getattr(console, "source", None) or source_header
+        total_accepted = 0
+        all_results = []
+        s_count, p_count, f_count = 0, 0, 0
+        chunk_size = 1000
+        for i in range(0, len(raw_lines), chunk_size):
+            chunk = raw_lines[i:i + chunk_size]
+            outcome = ingestion_service.ingest_batch(db, chunk, source=source_name)
+            total_accepted += len(outcome.results)
+            s_count += outcome.success_count
+            p_count += outcome.partial_count
+            f_count += outcome.failed_count
+            all_results.extend(outcome.results)
+
         return {
-            "accepted": len(outcome.results),
+            "accepted": total_accepted,
             "duplicates": 0,
-            "total": outcome.total,
-            "success_count": outcome.success_count,
-            "partial_count": outcome.partial_count,
-            "failed_count": outcome.failed_count,
-            "results": outcome.results,
+            "total": len(raw_lines),
+            "success_count": s_count,
+            "partial_count": p_count,
+            "failed_count": f_count,
+            "results": all_results,
         }
     
     # Standard single IngestRequest
     single = _validate(IngestRequest, raw_body)
-    return ingestion_service.ingest_raw_log(db, single.raw_log)
+    # Check if a single raw_log contains multiple lines (e.g. pasted CSV block)
+    if "\n" in single.raw_log:
+        split_lines = [l.strip() for l in single.raw_log.splitlines() if l.strip()]
+        if len(split_lines) > 1:
+            outcome = ingestion_service.ingest_batch(db, split_lines, source=single.source_hint or source_header)
+            return {
+                "accepted": len(outcome.results),
+                "duplicates": 0,
+                "total": outcome.total,
+                "success_count": outcome.success_count,
+                "partial_count": outcome.partial_count,
+                "failed_count": outcome.failed_count,
+                "results": outcome.results,
+            }
+    return ingestion_service.ingest_raw_log(db, single.raw_log, source=single.source_hint)
 
 
 @router.post("/ingest/batch", response_model=BatchIngestResponse, status_code=201)

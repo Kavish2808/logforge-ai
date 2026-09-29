@@ -20,16 +20,40 @@ const SAMPLES: Record<string, string> = {
   CEF: "CEF:0|Example|Firewall|1.0|100|Connection allowed|3|src=10.20.0.12 dst=203.0.113.24 dpt=443 act=allow custom_field=preserved",
   LEEF: "LEEF:1.0|Example|Gateway|1.0|100|src=10.20.0.12\tdst=203.0.113.24\tdstPort=443\taction=allow",
   XML: "<event><vendor>Example</vendor><src_ip>10.20.0.12</src_ip><dst_ip>203.0.113.24</dst_ip><action>allow</action><policy_id>edge-17</policy_id></event>",
+  CSV: "timestamp,src_ip,dst_ip,proto,action\n2026-09-30T00:00:00Z,10.0.1.15,203.0.113.25,TCP,accept\n2026-09-30T00:00:01Z,10.0.1.18,203.0.113.88,UDP,drop",
 };
 
-const SAMPLE_COLORS = ["#6cddbb", "#739ef5", "#bc9af1", "#e3b767", "#6cbed4"];
+const SAMPLE_COLORS = ["#6cddbb", "#739ef5", "#bc9af1", "#e3b767", "#6cbed4", "#ec7995"];
 
 function parseInput(raw: string, mode: string) {
-  if (mode === "Single event") return [{ raw }];
+  if (mode === "Single event") {
+    // If the input is clearly multi-line CSV or logs, automatically split to prevent single event byte overflow
+    if (raw.includes("\n") && (raw.includes(",") || raw.includes(" "))) {
+      const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      if (lines.length > 1) {
+        return lines.map((v) => ({ raw: v }));
+      }
+    }
+    return [{ raw }];
+  }
   if (mode === "JSON array") {
     const a = JSON.parse(raw);
     if (!Array.isArray(a)) throw new Error("Enter a JSON array of strings or event objects.");
     return a.map((v) => ({ raw: typeof v === "string" ? v : JSON.stringify(v) }));
+  }
+  if (mode === "CSV / Tabular rows") {
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length > 1 && lines[0].includes(",")) {
+      const headers = lines[0].split(",").map((h) => h.trim().replace(/^["']|["']$/g, ""));
+      return lines.slice(1).map((line) => {
+        const parts = line.split(",").map((p) => p.trim().replace(/^["']|["']$/g, ""));
+        const obj: Record<string, any> = {};
+        headers.forEach((h, i) => {
+          obj[h] = parts[i] !== undefined ? parts[i] : "";
+        });
+        return { raw: JSON.stringify(obj) };
+      });
+    }
   }
   return raw
     .split(/\r?\n/)
@@ -62,10 +86,28 @@ export function IngestPage() {
       const res = await fetch("/api/v1/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, events, idempotency_key: crypto.randomUUID() }),
+        body: JSON.stringify({ source: source || "default", events, idempotency_key: crypto.randomUUID() }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.detail || `Ingestion failed (${res.status})`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        let msg = "";
+        if (data.error) {
+          msg = data.error.message || "";
+          if (data.error.fields) {
+            const fieldDetails = Object.entries(data.error.fields)
+              .map(([f, m]) => `${f ? f + ": " : ""}${m}`)
+              .join("; ");
+            msg = msg ? `${msg}: ${fieldDetails}` : fieldDetails;
+          }
+        } else if (Array.isArray(data.detail)) {
+          msg = data.detail.map((d: any) => `${d.loc ? d.loc.slice(1).join(".") + ": " : ""}${d.msg}`).join("; ");
+        } else if (typeof data.detail === "string") {
+          msg = data.detail;
+        } else if (typeof data.message === "string") {
+          msg = data.message;
+        }
+        throw new Error(msg || `Ingestion failed (${res.status})`);
+      }
       setResult(data);
     } catch (err: any) {
       setError(err.message || String(err));
@@ -93,7 +135,7 @@ export function IngestPage() {
     <>
     <div className="page-head">
       <div>
-        <div className="eyebrow">DATA INGESTION</div>
+        <div className="eyebrow">Data Ingestion</div>
         <h1>Ingest Logs</h1>
         <p>Submit raw logs into the parsing, normalization, and cryptographic vault pipeline.</p>
       </div>
@@ -115,19 +157,19 @@ export function IngestPage() {
           <form onSubmit={submit} className="ingest-form">
             <div className="form-row">
               <label>
-                Source identifier
+                Source key
                 <input
                   value={source}
                   required
                   maxLength={120}
                   onChange={(e) => setSource(e.target.value)}
-                  placeholder="e.g. production-edge-firewall"
+                  placeholder="e.g. edge-firewall"
                 />
               </label>
               <label>
                 Input mode
                 <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                  {["Single event", "One event per line", "JSON array"].map((v) => (
+                  {["Single event", "One event per line", "CSV / Tabular rows", "JSON array"].map((v) => (
                     <option key={v}>{v}</option>
                   ))}
                 </select>
@@ -135,7 +177,7 @@ export function IngestPage() {
             </div>
 
             <div className="editor-heading">
-              <label htmlFor="raw-input">Raw log payload</label>
+              <label htmlFor="raw-input">Raw payload</label>
               <button type="button" className="text-button" onClick={() => file.current?.click()}>
                 <Upload size={14} />
                 Upload file
@@ -152,7 +194,15 @@ export function IngestPage() {
                       setError("Select a file smaller than 8 MB.");
                       return;
                     }
-                    updateRaw(await f.text());
+                    const text = await f.text();
+                    updateRaw(text);
+                    if (f.name.toLowerCase().endsWith(".csv") || text.split("\n")[0]?.includes(",")) {
+                      setMode("CSV / Tabular rows");
+                    } else if (text.trim().startsWith("[") && text.trim().endsWith("]")) {
+                      setMode("JSON array");
+                    } else if (text.includes("\n")) {
+                      setMode("One event per line");
+                    }
                   }
                   e.target.value = "";
                 }}
@@ -164,9 +214,7 @@ export function IngestPage() {
               className="log-editor"
               value={raw}
               onChange={(e) => updateRaw(e.target.value)}
-              placeholder={
-                "Paste your original log here…\n\nJSON, Syslog, CEF, LEEF, XML, or an unknown format.\nWe preserve the raw evidence even when parsing is incomplete."
-              }
+              placeholder="Paste raw log payload (JSON, Syslog, CEF, LEEF, XML). Raw bytes are preserved verbatim."
               required
               spellCheck={false}
             />
