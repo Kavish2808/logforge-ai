@@ -30,6 +30,8 @@ def list_events(
     status: str | None = None,
     format_detected: str | None = None,
     adapter_id: str | None = None,
+    source: str | None = None,
+    q: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[Event], int]:
@@ -48,6 +50,22 @@ def list_events(
     if adapter_id:
         stmt = stmt.where(Event.adapter_id == adapter_id)
         count_stmt = count_stmt.where(Event.adapter_id == adapter_id)
+    if source:
+        from sqlalchemy import or_
+        source_cond = or_(Event.adapter_id == source, Event.vendor == source)
+        stmt = stmt.where(source_cond)
+        count_stmt = count_stmt.where(source_cond)
+    if q and q.strip():
+        from sqlalchemy import or_
+        pattern = f"%{q.strip()}%"
+        q_cond = or_(
+            Event.event_id.ilike(pattern),
+            Event.vendor.ilike(pattern),
+            Event.adapter_id.ilike(pattern),
+            Event.raw_event.ilike(pattern),
+        )
+        stmt = stmt.where(q_cond)
+        count_stmt = count_stmt.where(q_cond)
 
     total = db.execute(count_stmt).scalar_one()
 

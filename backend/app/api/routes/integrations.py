@@ -95,13 +95,15 @@ def _audit(db: Session, actor: Actor, action: str, object_id: str | None, decisi
 
 
 @router.get("/integrations")
+@router.get("/api/integrations")
 @router.get("/api/v1/integrations")
-def list_integrations(actor: Actor = Depends(require(roles.GOVERNANCE))) -> list[dict[str, Any]]:
+def list_integrations(actor: Actor = Depends(require(roles.INSPECT))) -> list[dict[str, Any]]:
     with _LOCK:
         return _load()
 
 
 @router.post("/integrations", status_code=201)
+@router.post("/api/integrations", status_code=201)
 @router.post("/api/v1/integrations", status_code=201)
 def create_integration(body: IntegrationCreate, actor: Actor = Depends(require(roles.GOVERNANCE)),
                        db: Session = Depends(get_db)) -> dict[str, Any]:
@@ -130,6 +132,7 @@ def create_integration(body: IntegrationCreate, actor: Actor = Depends(require(r
 
 
 @router.post("/integrations/{integration_id}/deliver")
+@router.post("/api/integrations/{integration_id}/deliver")
 @router.post("/api/v1/integrations/{integration_id}/deliver")
 def deliver_integration(integration_id: str, actor: Actor = Depends(require(roles.GOVERNANCE)),
                         db: Session = Depends(get_db)) -> dict[str, Any]:

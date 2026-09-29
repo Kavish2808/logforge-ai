@@ -36,6 +36,7 @@ def _validate(model: type[BaseModel], data: bytes | dict) -> Any:
 
 
 @router.post("/ingest", status_code=201)
+@router.post("/api/ingest", status_code=201)
 @router.post("/api/v1/ingest", status_code=201)
 async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
     raw_body = await request.body()
@@ -52,7 +53,7 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
             return {"accepted": 0, "duplicates": 0, "total": 0}
         # Each line gets the same boundary checks as a single raw_log (length, NUL bytes).
         _validate(BatchIngestRequest, {"logs": [{"raw_log": line} for line in raw_lines]})
-        outcome = ingestion_service.ingest_batch(db, raw_lines)
+        outcome = ingestion_service.ingest_batch(db, raw_lines, source=getattr(console, "source", None))
         return {
             "accepted": len(outcome.results),
             "duplicates": 0,
@@ -60,6 +61,7 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
             "success_count": outcome.success_count,
             "partial_count": outcome.partial_count,
             "failed_count": outcome.failed_count,
+            "results": outcome.results,
         }
     
     # Standard single IngestRequest
@@ -68,6 +70,7 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
 
 
 @router.post("/ingest/batch", response_model=BatchIngestResponse, status_code=201)
+@router.post("/api/ingest/batch", response_model=BatchIngestResponse, status_code=201)
 @router.post("/api/v1/ingest/batch", response_model=BatchIngestResponse, status_code=201)
 def ingest_batch(request: BatchIngestRequest, db: Session = Depends(get_db)) -> BatchIngestResponse:
     outcome = ingestion_service.ingest_batch(db, [item.raw_log for item in request.logs])
@@ -82,6 +85,7 @@ def ingest_batch(request: BatchIngestRequest, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/ingest/demo", status_code=201)
+@router.post("/api/ingest/demo", status_code=201)
 @router.post("/api/v1/ingest/demo", status_code=201)
 def ingest_demo(db: Session = Depends(get_db)) -> dict[str, Any]:
     groups = {

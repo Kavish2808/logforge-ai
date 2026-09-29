@@ -39,7 +39,7 @@ def channels() -> dict[str, Any]:
 
 
 @router.post("/{alert_id}/ack")
-def acknowledge(alert_id: str, request: AckRequest, actor: Actor = Depends(require(roles.REVIEW)),
+def acknowledge(alert_id: str, request: AckRequest = AckRequest(), actor: Actor = Depends(require(roles.REVIEW)),
                 db: Session = Depends(get_db)) -> dict[str, Any]:
     try:
         alert = alert_service.acknowledge(db, alert_id, by=actor.username)

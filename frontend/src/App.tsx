@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { api, exportEvents, saveBlob } from './api';
 import type { Data } from './api';
 
-type Page = 'overview' | 'events' | 'ingest' | 'sources' | 'drift' | 'learning' | 'replay' | 'governance';
+type Page = 'overview' | 'events' | 'ingest' | 'sources' | 'drift' | 'learning' | 'replay' | 'governance' | 'demo';
 type User = { username: string; role: string };
 type Toast = { message: string; kind: 'success' | 'error' };
 type Action = (path: string, body?: unknown, success?: string) => Promise<Data | undefined>;
@@ -18,6 +18,7 @@ const nav: { id: Page; name: string; icon: LucideIcon; group: string }[] = [
   { id: 'learning', name: 'Adaptive learning', icon: Sparkles, group: 'INTELLIGENCE' },
   { id: 'replay', name: 'Replay & revisions', icon: RotateCcw, group: 'OPERATIONS' },
   { id: 'governance', name: 'Trust & governance', icon: ShieldCheck, group: 'OPERATIONS' },
+  { id: 'demo', name: 'Demo showcase', icon: Terminal, group: 'OPERATIONS' },
 ];
 const titles: Record<Page, [string, string]> = {
   overview: ['Your logs. A clearer picture.', 'One workspace for every event, every change, and every piece of evidence.'],
@@ -28,6 +29,7 @@ const titles: Record<Page, [string, string]> = {
   learning: ['Adaptive learning', 'Propose, validate, and evolve adapters with evidence at every step.'],
   replay: ['Replay & revisions', 'Reprocess stored evidence without rewriting its history.'],
   governance: ['Trust, built into every event.', 'Verify integrity, review sensitive changes, and follow the audit trail.'],
+  demo: ['Lifecycle showcase', 'Step-by-step reproducible run of evidence preservation, drift detection, and governed learning.'],
 };
 const readable = (s: unknown) => String(s ?? '—').replaceAll('_', ' ').toLowerCase().replace(/^\w/, (c: string) => c.toUpperCase());
 const number = (v: unknown) => typeof v === 'number' ? v.toLocaleString() : '—';
@@ -148,6 +150,7 @@ export default function App() {
     {page === 'learning' && <Learning tick={tick} action={action} busy={busy} />}
     {page === 'replay' && <Replay tick={tick} action={action} busy={busy} />}
     {page === 'governance' && <Governance tick={tick} action={action} busy={busy} download={download} user={user} />}
+    {page === 'demo' && <Demo tick={tick} action={action} busy={busy} />}
     <footer className="page-footer"><span><Fingerprint size={13} /> Evidence preserved. Decisions traceable.</span><span>LOGFORGE AI <i /> UNIVERSAL LOG INTELLIGENCE</span></footer></div></main>
     {toast && <div className={`toast ${toast.kind}`} role="status">{toast.kind === 'error' ? <XCircle size={20} /> : <CheckCheck size={20} />}<span>{toast.message}</span><button className="icon-button" aria-label="Dismiss notification" onClick={() => setToast(null)}><X size={17} /></button></div>}
     {selectedEvent && <EventDetails id={selectedEvent} onClose={closeEvent} notify={notify} tick={tick} />}
@@ -254,3 +257,73 @@ function Governance({ tick, action, busy, download, user }: { tick: number; acti
   const { data, loading, error } = useResource(endpoint, tick); const [selected, setSelected] = useState<Data>(); const [adding, setAdding] = useState(false); const [name, setName] = useState(''); const [url, setUrl] = useState(''); const close = useCallback(() => setSelected(undefined), []); const closeAdd = useCallback(() => setAdding(false), []);
   return <><div className="trust-grid"><div className="trust-card"><div className={`trust-symbol ${integrity.data?.valid === false ? 'failure' : ''}`}><Fingerprint size={27} /></div><div><span>Evidence integrity</span><strong>{integrity.loading ? 'Verifying…' : integrity.error ? 'Unavailable' : integrity.data?.valid ? 'Verified' : 'Exceptions detected'}</strong><small>{number(integrity.data?.total)} events checked</small></div></div><div className="trust-card"><div className="trust-symbol blue"><GitBranch size={26} /></div><div><span>Audit chain</span><strong>{integrity.loading ? 'Verifying…' : integrity.error ? 'Unavailable' : integrity.data?.audit_valid ? 'Chain intact' : 'Needs investigation'}</strong><small>Hash-linked activity records</small></div></div><div className="trust-card"><div className="trust-symbol violet"><ShieldCheck size={27} /></div><div><span>Access control</span><strong>{readable(user.role)}</strong><small>Signed in as {user.username}</small></div></div></div><ErrorNotice message={integrity.error} /><div className="section-toolbar"><Tabs options={['Review queue', 'Audit trail', 'Alerts', 'Integrations']} active={tab} onChange={setTab} /><div className="inline-actions">{tab === 'Integrations' ? <button className="button primary small" onClick={() => setAdding(true)}><Plus size={15} />Add webhook</button> : <><button className="button secondary small" onClick={() => download('json')}><ArrowDownToLine size={14} />JSON</button><button className="button secondary small" onClick={() => download('ndjson')}>NDJSON</button></>}</div></div><Panel title={tab} subtitle={{ 'Review queue': 'Independent approval for sensitive operations', 'Audit trail': 'Attributable actions with chained tamper evidence', 'Alerts': 'Operational signals and review SLA notifications', 'Integrations': 'Explicit webhook delivery with observable results' }[tab]} actions={tab === 'Audit trail' && data ? <Badge value={data.valid ? 'VERIFIED' : 'INVALID'} /> : <span className="count-label">{list(data).length} records</span>}><ErrorNotice message={error} />{loading ? <Loader /> : list(data).length ? <div className="governance-list">{list(data).map((r, i) => <div className="governance-item" key={r.id || i}><div className="governance-icon">{tab === 'Review queue' ? <ShieldCheck size={20} /> : tab === 'Audit trail' ? <GitBranch size={20} /> : tab === 'Alerts' ? <Bell size={20} /> : <Globe2 size={20} />}</div><div className="governance-item-main"><button className="row-link" onClick={() => setSelected(r)}>{r.name || r.title || readable(r.action || r.kind || r.type)}</button><p>{tab === 'Audit trail' ? `${r.actor || r.username || 'System'} · ${r.target || r.resource_id || short(r.id)}` : tab === 'Integrations' ? r.url : r.message || r.description || `${r.source || r.target || r.resource_id || short(r.id)}`}</p><span>{time(r.created_at)}{r.created_by || r.maker ? ` · By ${r.created_by || r.maker}` : ''}</span></div><Badge value={r.status || (r.acknowledged ? 'ACKNOWLEDGED' : r.severity) || (tab === 'Audit trail' ? 'RECORDED' : 'CONFIGURED')} />{tab === 'Review queue' && ['PENDING', 'OPEN', 'REQUESTED'].includes(r.status) && <button className="button secondary small" disabled={busy || (r.created_by || r.maker) === user.username} title={(r.created_by || r.maker) === user.username ? 'An independent reviewer must approve this request' : 'Approve request'} onClick={() => action(`/reviews/${r.id}/approve`, {}, 'Review approved')}><Check size={14} />Approve</button>}{tab === 'Alerts' && !r.acknowledged && !['ACKNOWLEDGED', 'RESOLVED'].includes(r.status) && <button className="button secondary small" disabled={busy} onClick={() => action(`/alerts/${r.id}/ack`, {}, 'Alert acknowledged')}>Acknowledge</button>}{tab === 'Integrations' && <button className="button secondary small" disabled={busy} onClick={() => action(`/integrations/${r.id}/deliver`, {}, 'Delivery queued; inspect integration status for results')}><Send size={14} />Queue delivery</button>}<button className="icon-button" title="Inspect record" aria-label="Inspect record" onClick={() => setSelected(r)}><ArrowUpRight size={16} /></button></div>)}</div> : <Empty title={{ 'Review queue': 'No pending decisions', 'Audit trail': 'No audit activity yet', 'Alerts': 'Your attention queue is clear', 'Integrations': 'Connect an external destination' }[tab]} description={{ 'Review queue': 'Sensitive changes appear here for independent maker-checker approval.', 'Audit trail': 'Important actions will be recorded in a hash-chained audit trail.', 'Alerts': 'New operational and governance signals will appear here.', 'Integrations': 'Add an HTTPS webhook to explicitly queue evidence deliveries and inspect their status.' }[tab]} icon={tab === 'Integrations' ? Globe2 : ShieldCheck} />}</Panel>{integrity.data?.failures?.length > 0 && <Panel title="Integrity exceptions" className="result-panel"><Json value={integrity.data?.failures} /></Panel>}{selected && <Modal title={`${tab} · record details`} onClose={close} wide><Json value={list(data).find(r => r.id === selected.id) || selected} /></Modal>}{adding && <Modal title="Add webhook integration" onClose={closeAdd}><form className="modal-form" onSubmit={async e => { e.preventDefault(); const r = await action('/integrations', { name, url }, 'Webhook integration configured'); if (r) { setAdding(false); setName(''); setUrl(''); } }}><div className="info-callout"><Globe2 size={18} /><span>Configure a destination, then explicitly queue a delivery. The backend validates destination policy and records delivery results.</span></div><label>Integration name<input required value={name} onChange={e => setName(e.target.value)} placeholder="Security operations webhook" /></label><label>HTTPS destination<input required type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://your-endpoint.example/events" /></label><button className="button primary" disabled={busy}><Plus size={15} />Create integration</button></form></Modal>}</>;
 }
+
+function Demo({ tick, action, busy }: { tick: number; action: Action; busy: boolean }) {
+  const { data: status, error, loading } = useResource('/demo/status', tick);
+  const [running, setRunning] = useState(false);
+  const [log, setLog] = useState<{ at: string; text: string; kind: 'ok' | 'fail' | 'info' }[]>([]);
+
+  const say = (text: string, kind: 'ok' | 'fail' | 'info' = 'ok') =>
+    setLog(l => [...l, { at: new Date().toLocaleTimeString(), text, kind }]);
+
+  async function runStep() {
+    setRunning(true);
+    try {
+      const r = await action('/ingest/demo', {}, 'Demo batch ingested');
+      if (r) say(`Ingestion completed: ${r.accepted || 0} events accepted across multiple vendors`, 'ok');
+    } catch (e) {
+      say((e as Error).message, 'fail');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function reset() {
+    setRunning(true);
+    try {
+      await action('/demo/reset', {}, 'Demo environment reset');
+      setLog([]);
+      say('Demo state reset successfully', 'info');
+    } catch (e) {
+      say((e as Error).message, 'fail');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return <>
+    <div className="section-banner">
+      <span className="banner-icon"><Terminal size={22} /></span>
+      <div>
+        <strong>Deterministic Lifecycle Demonstration</strong>
+        <p>Reproduce unknown-vendor onboarding, structural drift, human maker-checker decisions, and rollback.</p>
+      </div>
+      <div className="inline-actions" style={{ marginLeft: 'auto' }}>
+        <button className="button secondary small" disabled={busy || running} onClick={reset}><RotateCcw size={14} />Reset demo</button>
+        <button className="button primary small" disabled={busy || running} onClick={runStep}>{running ? <LoaderCircle size={14} className="spin" /> : <Play size={14} />}Run next step</button>
+      </div>
+    </div>
+    <ErrorNotice message={error} />
+    {loading && !status ? <Loader /> : <div className="overview-charts">
+      <Panel title="Lifecycle progress" subtitle={`Session: ${status?.namespace?.session_name || 'demo'} · Status: ${status?.completed ? 'Complete' : readable(status?.next?.kind || 'Ready')}`}>
+        <div className="learning-flow" style={{ margin: '15px 20px 20px', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          {[
+            { n: '01', t: 'Unknown Probe', s: status?.steps?.find((s: any) => s.id === 'probe')?.state || 'done', i: Terminal },
+            { n: '02', t: 'Onboarding', s: status?.steps?.find((s: any) => s.id === 'onboarding')?.state || 'done', i: Sparkles },
+            { n: '03', t: 'Drift & Learning', s: status?.steps?.find((s: any) => s.id === 'learning')?.state || 'pending', i: Activity },
+            { n: '04', t: 'Rollback & Safe', s: status?.steps?.find((s: any) => s.id === 'rollback')?.state || 'waiting', i: ShieldCheck },
+          ].map(s => <div key={s.n} style={{ padding: '16px' }}><span className="flow-number">{s.n}</span><s.i size={18} /><strong>{s.t}</strong><Badge value={s.s} /></div>)}
+        </div>
+        {status?.next && <div className="info-callout" style={{ margin: '0 20px 20px' }}><Workflow size={18} /><div><strong>Next action: {readable(status.next.step || status.next.action || 'Ready')}</strong><p style={{ margin: '4px 0 0', fontSize: '10px' }}>{status.next.prompt || 'Click "Run next step" to progress the lifecycle or review pending items.'}</p></div></div>}
+        {status?.steps && <div className="table-scroll"><table><thead><tr><th>Step</th><th>State</th><th>Action</th><th>Target</th></tr></thead><tbody>{status.steps.map((st: any) => <tr key={st.id}><td><strong>{st.title || readable(st.id)}</strong></td><td><Badge value={st.state} /></td><td className="mono">{st.action || '—'}</td><td className="muted">{st.target || status.namespace?.source_key || '—'}</td></tr>)}</tbody></table></div>}
+      </Panel>
+      <Panel title="Execution journal" subtitle="Live step logs and decisions" actions={<span className="count-label">{log.length} entries</span>}>
+        <div className="attention-list" style={{ minHeight: '340px', maxHeight: '480px', overflowY: 'auto' }}>
+          {log.map((l, i) => <div key={i} className="attention-item" style={{ padding: '12px 18px' }}><div className={`attention-icon ${l.kind === 'fail' ? 'critical' : l.kind === 'ok' ? 'medium' : ''}`}>{l.kind === 'fail' ? <XCircle size={15} /> : l.kind === 'ok' ? <CheckCheck size={15} /> : <Terminal size={15} />}</div><div><strong style={{ fontSize: '11px' }}>{l.text}</strong><span style={{ marginTop: '2px' }}>{l.at}</span></div></div>)}
+          {!log.length && <Empty title="Ready to demonstrate" description="Click 'Run next step' or 'Reset demo' to trace the pipeline execution." icon={Terminal} />}
+        </div>
+      </Panel>
+    </div>}
+  </>;
+}
+

@@ -16,6 +16,8 @@ def list_events(
     status: str | None = None,
     format_detected: str | None = Query(default=None, alias="format"),
     adapter_id: str | None = None,
+    source: str | None = None,
+    q: str | None = None,
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -26,6 +28,8 @@ def list_events(
         status=status,
         format_detected=format_detected,
         adapter_id=adapter_id,
+        source=source,
+        q=q,
         limit=limit,
         offset=offset,
     )

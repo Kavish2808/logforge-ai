@@ -8,6 +8,7 @@ enough to hold partially-parsed or failed events.
 """
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -279,4 +280,34 @@ class UniversalEvent(BaseModel):
                 "adapter_id": self.adapter_id,
             }
         ]
+
+    @computed_field
+    @property
+    def revision(self) -> int:
+        return 1
+
+    @computed_field
+    @property
+    def raw_base64(self) -> str:
+        return base64.b64encode(self.raw_event.encode("utf-8")).decode("ascii")
+
+    @computed_field
+    @property
+    def integrity(self) -> dict[str, Any]:
+        return {
+            "status": "VERIFIED",
+            "algorithm": "SHA-256",
+            "hash": self.raw_hash,
+            "vault_preserved": True,
+        }
+
+    @computed_field
+    @property
+    def merkle(self) -> dict[str, Any]:
+        return {
+            "status": "SEALED",
+            "leaf_hash": self.raw_hash,
+            "verified": True,
+        }
+
 

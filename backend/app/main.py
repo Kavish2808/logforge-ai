@@ -146,6 +146,8 @@ app.include_router(console_api.router)
 app.include_router(events.router, prefix="/api", dependencies=GOVERNED)
 app.include_router(auth.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
+app.include_router(demo.router, prefix="/api", dependencies=GOVERNED)
+
 
 
 @app.get("/")

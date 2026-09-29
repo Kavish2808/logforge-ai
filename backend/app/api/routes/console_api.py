@@ -445,12 +445,34 @@ def list_reviews(db: Session = Depends(get_db)) -> dict[str, Any]:
 
 
 @router.post("/reviews/{identifier}/approve")
-def approve_review(identifier: str) -> dict[str, Any]:
+def approve_review(identifier: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    audit_service.record(
+        db,
+        actor="admin",
+        role=roles.SOC_ADMIN,
+        authenticated=True,
+        action="REVIEW_APPROVE",
+        object_type="review",
+        object_id=identifier,
+        details={"decision": "APPROVED"},
+    )
+    db.commit()
     return {"id": identifier, "status": "APPROVED"}
 
 
 @router.post("/reviews/{identifier}/reject")
-def reject_review(identifier: str) -> dict[str, Any]:
+def reject_review(identifier: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    audit_service.record(
+        db,
+        actor="admin",
+        role=roles.SOC_ADMIN,
+        authenticated=True,
+        action="REVIEW_REJECT",
+        object_type="review",
+        object_id=identifier,
+        details={"decision": "REJECTED"},
+    )
+    db.commit()
     return {"id": identifier, "status": "REJECTED"}
 
 

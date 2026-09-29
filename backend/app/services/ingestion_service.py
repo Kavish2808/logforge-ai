@@ -58,7 +58,7 @@ class BatchIngestResult:
         self.under_review_count = sum(1 for r in results if r.status == EventStatus.UNDER_REVIEW)
 
 
-def ingest_raw_log(db: Session, raw_log: str) -> UniversalEvent:
+def ingest_raw_log(db: Session, raw_log: str, source: str | None = None) -> UniversalEvent:
     """Ingest a single raw log. Never raises: any unexpected failure in the
     pipeline or the database write still results in a persisted, FAILED
     event carrying the raw log and its hash, rather than a lost event or
@@ -69,6 +69,8 @@ def ingest_raw_log(db: Session, raw_log: str) -> UniversalEvent:
         registry = onboarding_service.runtime_registry(db)
         result = run_pipeline(raw_log, adapter_registry=registry)
         fields = _pipeline_result_fields(result)
+        if source and not fields.get("adapter_id"):
+            fields["adapter_id"] = source
         drift_service.evaluate(db, fields, event_id, adapter_registry=registry)  # Phase 5; never raises
         spill = evidence_service.prepare_fields(fields)  # Phase 7: lossless inline-budget split
         event = Event(event_id=event_id, **fields)
@@ -88,11 +90,11 @@ def ingest_raw_log(db: Session, raw_log: str) -> UniversalEvent:
         return _record_pipeline_exception(db, raw_log, exc)
 
 
-def ingest_batch(db: Session, raw_logs: list[str]) -> BatchIngestResult:
+def ingest_batch(db: Session, raw_logs: list[str], source: str | None = None) -> BatchIngestResult:
     """Ingests each log independently: one bad or even crashing log can
     never abort the rest of the batch, because ingest_raw_log itself never
     raises and always commits its own event."""
-    results = [ingest_raw_log(db, raw_log) for raw_log in raw_logs]
+    results = [ingest_raw_log(db, raw_log, source=source) for raw_log in raw_logs]
     return BatchIngestResult(results)
 
 
@@ -107,6 +109,8 @@ def list_events(
     status: str | None = None,
     format_detected: str | None = None,
     adapter_id: str | None = None,
+    source: str | None = None,
+    q: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[UniversalEvent], int]:
@@ -116,6 +120,8 @@ def list_events(
         status=status,
         format_detected=format_detected,
         adapter_id=adapter_id,
+        source=source,
+        q=q,
         limit=limit,
         offset=offset,
     )
