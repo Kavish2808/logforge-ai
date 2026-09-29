@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     drift_critical_fields: str = (
         "event_action,severity,network.src_ip,network.dst_ip,network.src_port,network.dst_port"
     )
+    # A critical field whose value no longer fits its typed target (port 0..65535,
+    # IP address, parseable timestamp) forces drift review even when the structure
+    # is unchanged. false = structural-only Phase 5 behavior.
+    drift_value_shape_enabled: bool = True
 
     # ---- Phase 7: trust / integration / governance layer (all additive) ----
     # Adaptive extension spill: extensions larger than this inline budget are

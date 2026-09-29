@@ -6,14 +6,14 @@ This repository was created from the supplied Phase 1–9 narrative, which descr
 
 | Phase / feature | Implementation in this project | Validation / boundary |
 | --- | --- | --- |
-| 1: FastAPI, database, deterministic ingestion | Batch APIs, SQLAlchemy models, native process startup, transactionally preserved raw evidence | Local SQLite/API tests; PostgreSQL deployment is a separate gate |
+| 1: FastAPI, database, deterministic ingestion | Single and batch ingest APIs (`/api/v1/ingest`, `/ingest/batch`), SQLAlchemy models on PostgreSQL (the only supported database), transactionally preserved raw evidence | API/integration tests against a dedicated PostgreSQL test database |
 | 1: Core formats | Syslog, JSON, CEF parsers | Golden parser and malformed-evidence tests |
 | 2: Vendor normalization | Cisco ASA, Fortinet, Palo Alto; generic mappings and preserved extension fields | Format and field-accounting tests; OCSF-aligned, not complete OCSF compliance |
 | 3: Unknown vendor onboarding | Bounded samples, deterministic declarative proposal, sandbox validation, reviewer approval, versioned activation | Governance tests; external Claude/LLM service is optional future integration |
-| 4: Failure hardening | Batch bounds, partial/failed states, strict envelopes, exact Base64 recovery, event APIs, idempotency | Parser/API tests and native HTTP smoke verification |
+| 4: Failure hardening | Request bounds (256,000 chars per log, 1,000 per batch), partial/failed states, strict envelopes, event APIs. No idempotency key, no deduplication, UTF-8 text only (no Base64 payloads) | Parser/API tests |
 | 5: Structural drift | Presence/order/count/type weighted similarity, classifications, severity, explicit human review | Deterministic drift tests; no automatic baseline replacement |
 | 6: Continuous learning | Learned-adapter-only evolution, accepted drift evidence, historical validation, immutable candidate definitions, rollback and baseline history | Workflow/governance tests |
-| 7: Evidence fabric | Database raw vault, SHA-256, batch Merkle roots/proofs, signed batch anchor, revision hashes | Integrity and tamper tests; database raw vault is not WORM |
+| 7: Evidence fabric | Content-addressed filesystem raw vault, SHA-256, batch Merkle roots/proofs chained and written to a local append-only anchor file (unsigned), revision hashes; global verification re-hashes every stored raw event | Integrity and tamper tests; the local anchor store is not a compliance-grade WORM device |
 | 7: Governance | Authenticated users, RBAC, maker-checker, audit hash chain, review ledger/SLA alerts | Security and workflow tests; external paging not configured |
 | 7: Exports | JSON and NDJSON evidence export | API tests; receiver-specific SIEM contracts require separate integration validation |
 | 8.1: Foundation/hooks | Engine/service boundaries, persistent worker steps, evidence persistence | New version-9 schema; no claim to migrate an unrelated existing Phase-8 installation |
@@ -28,9 +28,9 @@ This repository was created from the supplied Phase 1–9 narrative, which descr
 | 8.10: Benchmarks | Real HTTP batches 1/100/1,000/10,000, sustained load, latency percentiles, optional CPU/RSS and PostgreSQL snapshots | Only an actual report counts as measured performance; low sample counts are labelled |
 | 8.10B: Horizontal routing | Native NGINX round-robin with active readiness companion, pool metrics, passive failure handling, shared PostgreSQL state | Configuration/controller code and unit checks included; NGINX/PostgreSQL 1/2/4 deployment not executed here |
 | 8.10B: Correctness/failure injection | Native test runner starts 1/2/4 replicas, concurrent duplicate requests, byte/hash/vault/Merkle/revision checks, kill/restart/drain | Runnable with NGINX + PostgreSQL; no fabricated scale report |
-| 9: Runtime/auth/security | Bounded requests, production configuration validation, process health, drain controls, mandatory authenticated replay | Local security checks; TLS/service supervision remain deployment-specific |
-| 9: Integration | Generic webhook delivery queue, bounded batches, retries/status, endpoint controls | Local contract tests where recorded; external SIEM interoperability not claimed |
-| 9: Tamper evidence | Keyed batch signing plus hashes and audit chain | Signing-key custody is external; versioned rotation/external immutable anchors deferred |
+| 9: Runtime/auth/security | Bounded requests, production configuration validation (`APP_ENV=production` requires `RBAC_MODE=enforce`), `/health`; replays up to 10,000 events follow `RBAC_MODE` (anonymous allowed in permissive), larger replays need two authenticated engineers. No drain endpoint | Local security checks; TLS/service supervision remain deployment-specific |
+| 9: Integration | Webhook integration registry with destination (SSRF) controls, SOC_ADMIN-only and audited. Outbound delivery **not implemented**: `deliver` answers 501 and sends nothing; no queue, retries, signing or idempotency; registrations are node-local (JSON file, not replicated) | Contract tests prove nothing is sent; evidence transfer uses the export API. Alert notifications (webhook/Slack/Teams/SMTP) are a separate, implemented path |
+| 9: Tamper evidence | SHA-256 hashes, Merkle chain with local append-only anchors, hash-chained audit log. No keyed batch signing | External immutable anchors deferred |
 | 9: Database operations | Native backup helper, explicit schema bootstrap, indexes, restore procedure | Restore drill and PostgreSQL tuning need target environment; automatic archive/delete/partitioning deferred |
 | 9: Enterprise finalization | Validation scripts, operational docs, CI, honest capability boundaries | Independent security review, disaster-recovery certification, compliance evidence, and production soak deferred |
 

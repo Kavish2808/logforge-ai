@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.governance.deps import acting_as, current_actor
 from app.schema.onboarding import (
     AdapterListResponse,
     AdapterResponse,
@@ -21,6 +22,7 @@ from app.schema.onboarding import (
     SuggestRequest,
 )
 from app.services import onboarding_service as svc
+from app.services.auth_service import Actor
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
@@ -66,14 +68,15 @@ def submit_proposal(session_id: str, request: SubmitProposalRequest, db: Session
 
 
 @router.post("/sessions/{session_id}/approve", response_model=ApproveResponse)
-def approve(session_id: str, request: ApproveRequest, db: Session = Depends(get_db)) -> ApproveResponse:
+def approve(session_id: str, request: ApproveRequest, db: Session = Depends(get_db),
+            actor: Actor = Depends(current_actor)) -> ApproveResponse:
     session, row = _call(
         lambda: svc.approve(
             db,
             svc.get_session(db, session_id),
             proposal_version=request.proposal_version,
             adapter_id=request.adapter_id,
-            approved_by=request.approved_by,
+            approved_by=acting_as(request.approved_by, actor),
             note=request.note,
         )
     )
@@ -81,9 +84,10 @@ def approve(session_id: str, request: ApproveRequest, db: Session = Depends(get_
 
 
 @router.post("/sessions/{session_id}/reject", response_model=SessionResponse)
-def reject(session_id: str, request: RejectRequest, db: Session = Depends(get_db)) -> SessionResponse:
+def reject(session_id: str, request: RejectRequest, db: Session = Depends(get_db),
+           actor: Actor = Depends(current_actor)) -> SessionResponse:
     session = _call(
-        lambda: svc.reject(db, svc.get_session(db, session_id), reason=request.reason, rejected_by=request.rejected_by)
+        lambda: svc.reject(db, svc.get_session(db, session_id), reason=request.reason, rejected_by=acting_as(request.rejected_by, actor))
     )
     return svc.session_response(db, session)
 
@@ -103,8 +107,9 @@ def get_adapter(adapter_id: str, db: Session = Depends(get_db)) -> AdapterRespon
 
 
 @router.post("/adapters/{adapter_id}/rollback", response_model=AdapterResponse)
-def rollback(adapter_id: str, request: RollbackRequest, db: Session = Depends(get_db)) -> AdapterResponse:
-    _call(lambda: svc.rollback(db, adapter_id, reason=request.reason, requested_by=request.requested_by))
+def rollback(adapter_id: str, request: RollbackRequest, db: Session = Depends(get_db),
+             actor: Actor = Depends(current_actor)) -> AdapterResponse:
+    _call(lambda: svc.rollback(db, adapter_id, reason=request.reason, requested_by=acting_as(request.requested_by, actor)))
     return _adapter(db, adapter_id)
 
 

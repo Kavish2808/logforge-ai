@@ -504,6 +504,8 @@ def verify_chain(db: Session, *, recent: int | None = None) -> dict[str, Any]:
                                  "detail": "database batch differs from its immutable anchor"})
         prev = b.chain_hash
         expected_seq = b.seq + 1
+    rehashed = _verify_event_hashes(db, problems, from_seq=batches[0].seq if (recent and batches) else None,
+                                    include_unsealed=not recent)
     deleted = None if recent else db.execute(
         select(func.count()).select_from(EvidenceBatchMember)
         .outerjoin(Event, Event.event_id == EvidenceBatchMember.event_id).where(Event.event_id.is_(None))
@@ -515,6 +517,8 @@ def verify_chain(db: Session, *, recent: int | None = None) -> dict[str, Any]:
         "head": None if not batches else {"seq": batches[-1].seq, "chain_hash": batches[-1].chain_hash,
                                           "root_hash": batches[-1].root_hash},
         "problems": problems[:100],
+        # Stored raw events re-hashed during this verification (never trusted from raw_hash).
+        "events_rehashed": rehashed,
         # Sealed events whose rows were later deleted (e.g. a Demo Mode reset).
         # The sealed evidence stays verifiable; the events themselves are gone.
         "sealed_events_since_deleted": deleted,
@@ -522,6 +526,51 @@ def verify_chain(db: Session, *, recent: int | None = None) -> dict[str, Any]:
         "scope": f"newest {recent} batches" if recent else "full chain",
         "verified_at": datetime.now(tz=timezone.utc).isoformat(),
     }
+
+
+MAX_REPORTED_EVENT_IDS = 20
+# SHA-256 of the stored raw text as UTF-8, computed inside PostgreSQL so no raw payload leaves the
+# database; identical to app.pipeline.hashing.sha256_hex (UTF-8 bytes, hex digest).
+_REHASH = "encode(sha256(convert_to(e.raw_event, 'UTF8')), 'hex')"
+
+
+def _verify_event_hashes(db: Session, problems: list[dict[str, Any]], *, from_seq: int | None,
+                         include_unsealed: bool) -> int:
+    """Re-hash every stored raw event in scope instead of trusting `events.raw_hash`:
+
+    - RAW_HASH_MISMATCH: SHA-256(raw_event) != events.raw_hash (raw text altered, or hash rewritten);
+    - EVENT_HASH_NOT_SEALED_LEAF: a sealed event's raw_hash differs from the raw_hash its Merkle leaf
+      was built from (hash rewritten after sealing, even if consistent with an altered raw_event).
+
+    Scope: members of the checked batches (from `from_seq`, or all), plus unsealed events when
+    `include_unsealed`. Detects only; nothing is repaired. Returns the number of events re-hashed."""
+    sealed_scope = "" if from_seq is None else "WHERE m.batch_seq >= :from_seq"
+    params = {} if from_seq is None else {"from_seq": from_seq}
+    row = db.execute(text(f"""
+        SELECT count(*),
+               array_agg(e.event_id ORDER BY e.event_id) FILTER (WHERE {_REHASH} <> e.raw_hash),
+               array_agg(e.event_id ORDER BY e.event_id) FILTER (WHERE e.raw_hash <> m.raw_hash),
+               array_agg(DISTINCT m.batch_seq) FILTER (WHERE {_REHASH} <> e.raw_hash OR e.raw_hash <> m.raw_hash)
+        FROM evidence_batch_members m JOIN events e ON e.event_id = m.event_id {sealed_scope}"""), params).one()
+    checked = row[0] or 0
+    raw_bad, leaf_bad, bad_batches = list(row[1] or []), list(row[2] or []), sorted(row[3] or [])
+    if include_unsealed:
+        urow = db.execute(text(f"""
+            SELECT count(*), array_agg(e.event_id ORDER BY e.event_id) FILTER (WHERE {_REHASH} <> e.raw_hash)
+            FROM events e WHERE NOT EXISTS (SELECT 1 FROM evidence_batch_members m WHERE m.event_id = e.event_id)
+        """)).one()
+        checked += urow[0] or 0
+        unsealed_bad = list(urow[1] or [])
+        if unsealed_bad:
+            problems.append({"problem": "RAW_HASH_MISMATCH", "sealed": False, "count": len(unsealed_bad),
+                             "event_ids": unsealed_bad[:MAX_REPORTED_EVENT_IDS]})
+    if raw_bad:
+        problems.append({"problem": "RAW_HASH_MISMATCH", "sealed": True, "count": len(raw_bad),
+                         "event_ids": raw_bad[:MAX_REPORTED_EVENT_IDS], "batch_seqs": bad_batches[:MAX_REPORTED_EVENT_IDS]})
+    if leaf_bad:
+        problems.append({"problem": "EVENT_HASH_NOT_SEALED_LEAF", "count": len(leaf_bad),
+                         "event_ids": leaf_bad[:MAX_REPORTED_EVENT_IDS], "batch_seqs": bad_batches[:MAX_REPORTED_EVENT_IDS]})
+    return checked
 
 
 def verify_event(db: Session, event_id: str) -> dict[str, Any]:

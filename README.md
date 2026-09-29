@@ -417,7 +417,12 @@ provider must pass the contract tests in `test_limitation_fixes.py`. Only
   match. A forgery that rewrites both `raw_event` and `raw_hash` is still caught by the sealed leaf.
 - `GET /api/v1/integrity/verify` recomputes every root from its leaves, checks each leaf against
   its `(event_id, raw_sha256)`, chain continuity and sequence, and compares each batch with its
-  anchor. Deleted-but-sealed events (e.g. Demo reset) are counted, not treated as failures.
+  anchor. It also re-hashes every stored raw event inside PostgreSQL instead of trusting
+  `raw_hash`: `RAW_HASH_MISMATCH` (raw text no longer matches its hash, sealed or unsealed) and
+  `EVENT_HASH_NOT_SEALED_LEAF` (the event's hash differs from the one its leaf sealed) fail the
+  verification with the event and batch ids (`events_rehashed` reports the count). Nothing is
+  repaired. The alert sweep runs the same checks on the newest 20 batches. Deleted-but-sealed
+  events (e.g. Demo reset) are counted, not treated as failures.
 - `GET /api/v1/governance/audit/verify` re-hashes the audit log. Each record's hash covers its
   canonical content plus the previous hash, so edits, deletions and re-hashed forgeries are detected.
 
@@ -435,7 +440,9 @@ provider must pass the contract tests in `test_limitation_fixes.py`. Only
 - **Maker-checker:** for onboarding approval and learning approve/activate, an authenticated user
   who suggested, proposed or edited the object cannot approve it.
 - **Identity binding:** when a token is presented, free-text identity fields (`approved_by`,
-  `requested_by`, `by`, …) must equal the signed-in user.
+  `requested_by`, `by`, …) must equal the signed-in user. When omitted on an approval-type
+  decision (approve, reject, activate, rollback, request-review) the record gets the acting
+  identity — the signed-in user, or `anonymous` in permissive mode — never an empty value.
 - `RBAC_MODE=permissive` (default, for development and Demo Mode) keeps anonymous calls
   working, audited as `anonymous`. `RBAC_MODE=enforce` requires a token for every governed
   action. User management and configuration are never anonymous.
@@ -531,6 +538,7 @@ in the PRD's MVP scope). Key variables:
 | `DRIFT_ENABLED` | `true` (default) enables drift detection; `false` restores Phase 0-4 ingestion behavior exactly |
 | `DRIFT_SIMILARITY_THRESHOLD` | `0.0`–`1.0` (default `0.85`); vendor events scoring below it vs. their baseline become `UNDER_REVIEW` |
 | `DRIFT_CRITICAL_FIELDS` | Comma-separated OCSF targets (default `event_action,severity,network.src_ip,network.dst_ip,network.src_port,network.dst_port`) whose removal or type change always forces review |
+| `DRIFT_VALUE_SHAPE_ENABLED` | `true` (default): a critical field whose value no longer fits its typed target (port, IP, timestamp) forces review; `false` = structure-only detection |
 | `LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `ONBOARDING_LLM_MODEL` | Optional Claude provider for onboarding suggestions and the learning assistant (`claude-opus-5` by default) when a key is set; otherwise the offline engines. Never used by the runtime pipeline |
 | `ONBOARDING_MIN_MATCH_RATE`, `ONBOARDING_REJECT_BELOW_MATCH_RATE`, `ONBOARDING_MIN_MAPPING_COVERAGE` | Sandbox thresholds (defaults 0.90 / 0.50 / 0.30) |
 
@@ -595,7 +603,8 @@ UNKNOWN SOURCE → samples (10–15 recommended) → deterministic multi-sample 
    validation is still not active (`activation.state:
    NOT_ACTIVE_AWAITING_APPROVAL`). Only `POST .../approve` with the exact
    `proposal_version` activates it, after re-running the sandbox. The record
-   keeps who (`approved_by`, free text — there is no authentication), when,
+   keeps who (`approved_by`: the signed-in user, or `anonymous` for an
+   unauthenticated call in `RBAC_MODE=permissive` — see Phase 7 RBAC), when,
    the proposal version, the validation result/match rate and the mapping.
    `reject` activates nothing and keeps the samples; a rejected session can
    receive a new proposal.
@@ -768,6 +777,27 @@ the event drifts regardless of similarity (removing the source IP from a
 17-field Palo Alto event still scores ≈0.96), the field is reported in
 `critical_field_changes`, severity is at least `HIGH`, and
 `reonboarding_required` is `true`.
+
+**Critical value shape.** Text parsers (CEF, syslog key=value, onboarded
+kv/delimited) type every value as a string, so a parser-level type change
+cannot occur there. Therefore the *value* of each critical field is also
+checked against the shape its typed target defines — `network.*_port` an
+integer 0–65535, `network.*_ip` an IPv4/IPv6 address, `timestamp` (only when
+declared critical) parseable by the adapter. `spt=not-a-port` or
+`src=10.0.0.999` drifts even with an identical structure: decision reason
+`CRITICAL_FIELD_VALUE_SHAPE_CHANGED`, change type `FIELD_VALUE_SHAPE_CHANGE`,
+a `critical_field_changes` entry (`baseline_type` = expected shape,
+`current_type` = observed shape) and details in `value_shape_changes`.
+Free-text fields (`event_action`, `severity`, users, …) have no shape, so
+ordinary value changes never drift. Empty values and vendor placeholders
+(`-`, `--`, `n/a`, `na`, `none`, `null`, `unknown`, `?`) mean "no value": such
+an event stays `PARTIAL` (value preserved in extensions) and is not a
+finding. The shapes observed on the event that auto-bootstraps a source's
+baseline are accepted with that baseline. Accepting such a drift (`add_variant` /
+`replace_baseline`) records the observed shape for that field as accepted
+for the source (`accepted_value_shapes` on the baseline, with a new baseline
+version and history entry); `acknowledge` does not. `DRIFT_VALUE_SHAPE_ENABLED=false`
+restores structure-only detection.
 
 **Classification.** Every applicable change type is listed in
 `change_types`: `FIELD_ADDITION`, `FIELD_REMOVAL`, `FIELD_TYPE_CHANGE`,
@@ -1120,8 +1150,16 @@ the demo's data.
   about 1,200 events takes about 60–100 ms. These are local measurements, not a
   throughput benchmark.
 - **No SIEM forwarding and no data-lake integration.** The published
-  `logforge.export.v1` contract is the integration boundary.
-- **LEEF and XML are not supported.**
+  `logforge.export.v1` contract is the integration boundary. The webhook
+  integration registry (`/api/v1/integrations`, SOC_ADMIN only) stores
+  destinations but outbound delivery is **not implemented**: `deliver` sends
+  nothing and answers `501 NOT_IMPLEMENTED` (no signing, retries or
+  idempotency). Registrations live in a node-local JSON file (not replicated,
+  not backed up).
+- **Syslog-wrapped LEEF is a syslog event.** Bare LEEF 1.0/2.0 and XML are
+  parsed natively (Phase 8); a LEEF payload inside a syslog envelope keeps
+  syslog priority — its attributes are not extracted into typed fields, and
+  the complete payload is preserved in the normalized message.
 - **Live Claude inference has not been verified** — no API key was available.
   The Claude suggestion provider and learning assistant are covered by mocked
   HTTP, schema-validation, refusal/error and fallback tests; no live Claude

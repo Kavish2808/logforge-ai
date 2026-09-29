@@ -47,7 +47,7 @@ from app.db.models.source_baseline import (
     SourceBaseline,
 )
 from app.db.repository import baseline_repo, event_repo
-from app.pipeline.drift import analysis
+from app.pipeline.drift import analysis, value_shape
 from app.pipeline.drift.comparator import REASON_FORMAT_CHANGED, compare, structural_differences
 from app.pipeline.parsers.registry import get_parser
 from app.schema.adapter import AdapterMapping
@@ -162,14 +162,21 @@ def _evaluate_known_source(
     source_key = adapter.id
     fingerprint = fields["structural_fingerprint"]
     baseline = baseline_repo.get_baseline(db, source_key)
+    critical_fields = analysis.resolve_critical_fields(adapter, get_settings().drift_critical_fields_list)
     if baseline is None:
+        # The provisional reference is whatever was first observed - including the shape of its
+        # critical values, so the bootstrapping event never drifts against its own baseline.
+        bootstrap_shapes: dict[str, list[str]] = {}
+        for f in _value_shape_findings(fields, adapter, critical_fields, None):
+            bootstrap_shapes.setdefault(f["field"], []).append(f["observed_shape"])
+        baseline_fingerprint = {**fingerprint, ACCEPTED_VALUE_SHAPES: bootstrap_shapes} if bootstrap_shapes else fingerprint
         baseline, created = baseline_repo.insert_if_absent(
             db,
             source_key=source_key,
             adapter_id=adapter.id,
             adapter_version=fields.get("adapter_version"),
             format_detected=fields["format_detected"],
-            fingerprint=fingerprint,
+            fingerprint=baseline_fingerprint,
             created_from_event_id=event_id,
         )
         if created:
@@ -178,7 +185,7 @@ def _evaluate_known_source(
                 source_key=source_key,
                 version=baseline.version,
                 action=HISTORY_BASELINE_CREATED,
-                fingerprint=fingerprint,
+                fingerprint=baseline_fingerprint,
                 event_id=event_id,
                 note="Provisional baseline auto-bootstrapped from the first observed structure.",
             )
@@ -196,7 +203,6 @@ def _evaluate_known_source(
                 False,
             )
 
-    critical_fields = analysis.resolve_critical_fields(adapter, get_settings().drift_critical_fields_list)
     comparison = compare(
         fingerprint,
         baseline.fingerprint,
@@ -206,6 +212,12 @@ def _evaluate_known_source(
         baseline_format=baseline.format_detected,
         critical_fields=critical_fields,
     )
+    shape_findings = _value_shape_findings(fields, adapter, critical_fields, baseline)
+    if shape_findings:
+        # Structure may be identical; a critical value no longer fits its typed target.
+        comparison.is_drift = True
+        comparison.critical_changes = comparison.critical_changes + value_shape.as_critical_changes(shape_findings)
+        comparison.decision_reasons.append(value_shape.REASON_CRITICAL_VALUE_SHAPE_CHANGED)
     record: dict[str, Any] = {
         "status": (DriftStatus.DRIFT if comparison.is_drift else DriftStatus.NORMAL).value,
         "source_key": source_key,
@@ -222,6 +234,9 @@ def _evaluate_known_source(
         record["components"] = comparison.components
         record["differences"] = comparison.differences
         record["change_types"] = analysis.classify_changes(comparison.differences)
+    if shape_findings:
+        record["change_types"] = record["change_types"] + [value_shape.FIELD_VALUE_SHAPE_CHANGE]
+        record["value_shape_changes"] = shape_findings
     if comparison.is_drift:
         severity, score, factors = analysis.compute_severity(
             comparison.differences,
@@ -250,6 +265,50 @@ def _evaluate_known_source(
             }
         )
     return record, comparison.is_drift
+
+
+ACCEPTED_VALUE_SHAPES = "accepted_value_shapes"  # additive baseline-fingerprint key; ignored by the comparator
+
+
+def _value_shape_findings(
+    fields: dict[str, Any], adapter: AdapterMapping, critical_fields: dict[str, str | None],
+    baseline: SourceBaseline | None,
+) -> list[dict[str, Any]]:
+    """Critical values that no longer fit their typed target (value_shape module). Values come from
+    the pipeline output first (a value that failed typed coercion stays in extensions under its raw
+    name; a valid one is in its typed group), and only for an unresolved timestamp from a re-parse."""
+    if not get_settings().drift_value_shape_enabled:
+        return []
+    extensions = fields.get("extensions") or {}
+    values: dict[str, Any] = {}
+    reparsed: dict[str, Any] | None = None
+    for raw, target in critical_fields.items():
+        if target not in value_shape.SHAPE_BY_TARGET:
+            continue
+        if raw in extensions:
+            values[raw] = extensions[raw]
+        elif target.startswith("network."):
+            values[raw] = (fields.get("network") or {}).get(target.split(".", 1)[1])
+        elif target == "timestamp" and fields.get("event_timestamp") is None:
+            if reparsed is None:
+                reparsed = _reparse_for(fields, adapter)
+            values[raw] = reparsed.get(raw)
+    accepted = ((baseline.fingerprint or {}).get(ACCEPTED_VALUE_SHAPES) or {}) if baseline is not None else {}
+    return value_shape.check(critical_fields, values, timestamp_format=adapter.timestamp_format, accepted=accepted)
+
+
+def _reparse_for(fields: dict[str, Any], adapter: AdapterMapping) -> dict[str, Any]:
+    """Parser-level fields for a native format, or via the adapter's declarative parser."""
+    if get_parser(fields["format_detected"]) is not None:
+        return _reparse(fields)
+    if adapter.parser is None:
+        return {}
+    try:
+        from app.pipeline.parsers.declarative import DeclarativeParser
+
+        return DeclarativeParser(adapter.parser).parse(fields["raw_event"]).fields
+    except Exception:  # noqa: BLE001 — a failed re-parse just yields no value to check
+        return {}
 
 
 def _evaluate_adapter_fallback(
@@ -369,6 +428,7 @@ def accept(db: Session, event: Event, mode: str, note: str | None = None) -> tup
 
     now = _now_iso()
     fingerprint = event.structural_fingerprint
+    version_before = baseline.version
     if mode == ACCEPT_ACKNOWLEDGE:
         resolution = "acknowledged"
     elif mode == ACCEPT_ADD_VARIANT:
@@ -396,6 +456,9 @@ def accept(db: Session, event: Event, mode: str, note: str | None = None) -> tup
         resolution = "replaced_baseline"
     else:
         raise DriftConflictError(f"Unknown accept mode '{mode}'.")
+    if mode != ACCEPT_ACKNOWLEDGE and drift.get("value_shape_changes"):
+        _accept_value_shapes(db, baseline, event, drift["value_shape_changes"], note,
+                             bump=baseline.version == version_before)
 
     metadata["drift"] = {
         **drift,
@@ -460,6 +523,39 @@ def _add_variant(
     )
 
 
+def _accept_value_shapes(
+    db: Session, baseline: SourceBaseline, event: Event, findings: list[dict[str, Any]], note: str | None,
+    *, bump: bool,
+) -> None:
+    """Record the reviewed critical-field value shapes as accepted for the source, so the same shape is
+    NORMAL from now on. A new baseline version + history entry is written when the structure itself was
+    already known (the accept did not otherwise change the baseline)."""
+    fingerprint = dict(baseline.fingerprint or {})
+    accepted = {k: list(v) for k, v in (fingerprint.get(ACCEPTED_VALUE_SHAPES) or {}).items()}
+    added: dict[str, list[str]] = {}
+    for f in findings:
+        shapes = accepted.setdefault(f["field"], [])
+        if f["observed_shape"] not in shapes:
+            shapes.append(f["observed_shape"])
+            added.setdefault(f["field"], []).append(f["observed_shape"])
+    if not added:
+        return
+    fingerprint[ACCEPTED_VALUE_SHAPES] = accepted
+    baseline.fingerprint = fingerprint  # reassign so the JSONB change is detected
+    if bump:
+        baseline.version += 1
+        baseline_repo.add_history(
+            db,
+            source_key=baseline.source_key,
+            version=baseline.version,
+            action=HISTORY_VARIANT_ADDED,
+            fingerprint=fingerprint,
+            event_id=event.event_id,
+            changes={"accepted_value_shapes": added, "change_types": [value_shape.FIELD_VALUE_SHAPE_CHANGE]},
+            note=note,
+        )
+
+
 def _history_changes(new: dict[str, Any], old_reference: dict[str, Any]) -> dict[str, Any]:
     diff = structural_differences(new, old_reference)
     return {
@@ -513,6 +609,7 @@ def _to_response(
 ) -> BaselineResponse:
     response = BaselineResponse.model_validate(baseline, from_attributes=True)
     response.under_review_count = under_review_count
+    response.accepted_value_shapes = (baseline.fingerprint or {}).get(ACCEPTED_VALUE_SHAPES) or {}
     response.history = history
     return response
 

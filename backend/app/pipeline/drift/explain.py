@@ -99,11 +99,18 @@ def _change_lines(record: Any) -> list[str]:
         fmt = _get(diff, "format_changed")
         if fmt:
             lines.append(f"⇄ format changed {_get(fmt, 'baseline')} → {_get(fmt, 'current')}")
+    shaped = {_get(s, "field"): s for s in _get(record, "value_shape_changes") or []}
     for change in _get(record, "critical_field_changes") or []:
         target = _get(change, "target")
         label = f"{_get(change, 'field')}" + (f" ({target})" if target else "")
+        shape = shaped.get(_get(change, "field"))
         if _get(change, "change") == "removed":
             lines.append(f"! critical field removed: {label}")
+        elif shape is not None and _get(change, "current_type") == _get(shape, "observed_shape"):
+            lines.append(
+                f"! critical field value no longer fits its type: {label} expected {_get(shape, 'expected_shape')}, "
+                f"got {_get(shape, 'observed_shape')} {_get(shape, 'value_preview')!r}"
+            )
         else:
             lines.append(
                 f"! critical field type changed: {label} "

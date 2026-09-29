@@ -54,6 +54,8 @@ class BaselineResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     under_review_count: int = 0
+    # Critical-field value shapes a human accepted for this source ({raw field: [shape, ...]}).
+    accepted_value_shapes: dict[str, list[str]] = Field(default_factory=dict)
     # Structural evolution, oldest first. Included on single-baseline and
     # accept responses; omitted (null) from the list endpoint.
     history: list[BaselineHistoryEntry] | None = None
