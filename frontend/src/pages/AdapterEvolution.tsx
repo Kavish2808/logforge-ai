@@ -88,7 +88,7 @@ function Picker() {
   const sources = useApi((s) => getSources(s), []);
   return (
     <>
-      <div className="page-head"><div><h1>Adapter Evolution</h1><p>How each source's adapter and baseline changed over time — and why.</p></div></div>
+      <div className="page-head"><div><div className="eyebrow">Adapt · versioned parsers</div><h1>Adapter Evolution</h1><p>How each source's adapter and baseline changed over time — and why.</p></div></div>
       <Card title="Choose a source">
         <Load state={sources} isEmpty={(d) => d.items.length === 0} empty="No sources yet.">
           {(d) => (

@@ -114,3 +114,8 @@ export const getExportSchema = (signal?: Sig) =>
   request<{ schema_version: string; semantics: Record<string, string> }>("/export/schema", { signal });
 export const getExportLogs = (signal?: Sig) => request<{ items: ExportLog[] }>("/export/logs", { query: { limit: 10 }, signal });
 export const exportEvents = (query: Query) => download("/export/events", { query });
+
+// --- Integrations registry (SOC_ADMIN; delivery answers 501 NOT_IMPLEMENTED) ------------------
+export const listIntegrations = (signal?: Sig) => request<import("./types").IntegrationItem[]>("/integrations", { signal });
+export const createIntegration = (body: { name: string; url: string }) =>
+  request<import("./types").IntegrationItem>("/integrations", { method: "POST", body });

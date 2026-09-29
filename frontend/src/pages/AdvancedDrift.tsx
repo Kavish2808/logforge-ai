@@ -155,6 +155,7 @@ export function AdvancedDrift() {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Adapt · change detection</div>
           <h1>Advanced Drift</h1>
           <p>Structural (Phase 5) → statistical → semantic advisory. Deterministic evidence only; nothing here changes a baseline or adapter.</p>
         </div>

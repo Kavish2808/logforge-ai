@@ -196,6 +196,7 @@ export function Demo() {
     <>
       <div className="page-head">
         <div>
+          <div className="eyebrow">Showcase · end-to-end</div>
           <h1>Demo Mode</h1>
           <p>One reproducible run of the real lifecycle: unknown vendor → adapter v1 → drift → learning → v2 → rollback. Every step calls the public API; every decision waits for you.</p>
         </div>
@@ -222,6 +223,28 @@ export function Demo() {
           {resetResult.non_demo_rows.unchanged ? " (unchanged)" : ""}
         </div>
       )}
+
+      <Load state={status}>
+        {(s) => {
+          const done = s.steps.filter((x) => x.state === "done").length;
+          return (
+            <Card className="hero" title="The LogForge story"
+              actions={<span className="pill"><span className={`dot ${s.complete ? "ok" : ""}`} style={{ marginRight: 0 }} />{done} / {s.steps.length} steps complete</span>}>
+              <p className="small" style={{ marginTop: -4, marginBottom: 12 }}>
+                Unknown log → adaptive onboarding → parser created → new logs → drift detected → learning → new adapter version → rollback.
+                Each tile below is a real lifecycle step and its state as recorded in the database.
+              </p>
+              <ol className="story" aria-label="Demo storyline">
+                {s.steps.map((x) => (
+                  <li key={x.key} className={x.state === "done" ? "done" : x.state === "pending" || x.state === "human" ? "now" : ""}>
+                    <strong>{x.title}</strong>{STATE_LABEL[x.state]}
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          );
+        }}
+      </Load>
 
       <div className="grid g-main">
         <Card title="Lifecycle">

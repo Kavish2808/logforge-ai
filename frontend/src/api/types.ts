@@ -415,7 +415,7 @@ export interface TrustSummary {
 
 export interface ChainVerify {
   valid: boolean; batches_checked: number; events_sealed: number; problems: ChainProblem[];
-  sealed_events_since_deleted: number | null; anchor_store: Dict; verified_at: string; head: Dict | null;
+  sealed_events_since_deleted: number | null; anchor_store: Dict; verified_at: string; head: Dict | null; events_rehashed?: number;
 }
 export interface EventVerify {
   event_id: string; event_present: boolean; valid: boolean; status: string;
@@ -471,3 +471,14 @@ export interface ExportLog {
   status: string; rows: number; has_more: boolean | null; started_at: string; completed_at: string | null;
 }
 export interface PolicyRule { method: string; path: string; action: string; object_type: string; critical: boolean; maker_checker_actions: string[] }
+
+// --- Integrations registry (outbound delivery is NOT implemented server-side) -------------------
+export interface IntegrationItem {
+  id: string;
+  name: string;
+  url: string;
+  status: string;
+  delivery: string;
+  created_by: string;
+  created_at: string;
+}

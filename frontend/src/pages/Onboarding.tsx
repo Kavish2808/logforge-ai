@@ -1,12 +1,13 @@
 // Onboarding — Phase 3 unknown-vendor onboarding as a 7-step wizard over the
 // existing /onboarding API. Suggestions are labelled by their real provider.
 import { useState } from "react";
+import { Bot, CheckCircle2, Cpu, FileStack, Gauge, ListChecks, ShieldCheck, XCircle } from "lucide-react";
 import {
   approveOnboarding, createOnboarding, getEvents, getOnboarding, listOnboarding, rejectOnboarding, suggestOnboarding,
 } from "../api/endpoints";
 import type { OnboardingSession } from "../api/types";
 import { ActingAs, ConfidenceCard, SlaPanel } from "../components/trust";
-import { Badge, Card, KV, Load, Pipeline, Stat } from "../components/ui";
+import { Badge, Card, KV, Kpi, Load, Pipeline, Stat } from "../components/ui";
 import { fmtTime, providerLabel } from "../lib/format";
 import { useAuth } from "../lib/auth";
 import { Link, navigate } from "../lib/router";
@@ -90,12 +91,46 @@ function List() {
     <>
       <div className="page-head">
         <div>
+          <div className="eyebrow">Adaptive onboarding</div>
           <h1>Onboarding</h1>
-          <p>Teach LogForge an unknown vendor from samples: deterministic analysis, a suggested adapter, sandbox validation, and a human approval before anything is active.</p>
+          <p>Teach LogForge a new log source without hard-coded parser development: deterministic analysis, a suggested adapter, sandbox validation, and a human approval before anything is active.</p>
         </div>
         <button className="primary" onClick={() => setCreating(!creating)}>{creating ? "Close" : "New session"}</button>
       </div>
-      <Pipeline steps={STEPS} />
+      <Card className="hero">
+        <Pipeline steps={STEPS} />
+        <div className="modes" style={{ marginTop: 14 }}>
+          <div className="mode-card ai">
+            <span className="mc-icon" aria-hidden="true"><Bot size={20} /></span>
+            <div><strong>AI-assisted</strong>
+              <p>Claude proposes the adapter from deterministic evidence when an API key is configured. Its output is untrusted until it passes the same sandbox and a human approves it.</p></div>
+          </div>
+          <div className="mode-card det">
+            <span className="mc-icon" aria-hidden="true"><Cpu size={20} /></span>
+            <div><strong>Deterministic · no AI</strong>
+              <p>The offline analyzer builds the proposal from field statistics alone — no network, fully reproducible. The same validation and approval gates apply.</p></div>
+          </div>
+        </div>
+      </Card>
+      <Load state={sessions}>
+        {(d) => {
+          const it = d.items;
+          const passed = it.filter((s) => s.validation_result === "PASSED").length;
+          const approved = it.filter((s) => s.status === "APPROVED").length;
+          const failed = it.filter((s) => s.status === "SUGGESTION_FAILED" || s.status === "REJECTED").length;
+          const rates = it.map((s) => s.match_rate).filter((x): x is number => typeof x === "number");
+          return (
+            <div className="kpis">
+              <Kpi label="Sessions" value={it.length} icon={FileStack} hint={`${it.reduce((a, s) => a + s.sample_count, 0)} samples collected`} />
+              <Kpi label="Validation passed" value={passed} icon={ListChecks} tone="ok" hint="sandbox PASSED" />
+              <Kpi label="Adapters approved" value={approved} icon={ShieldCheck} tone="cyan" hint="activated after human approval" />
+              <Kpi label="Avg match rate" value={rates.length ? `${((rates.reduce((a, b) => a + b, 0) / rates.length) * 100).toFixed(0)}%` : "—"} icon={Gauge}
+                hint={rates.length ? `over ${rates.length} validated session(s)` : "no validated sessions yet"} />
+              <Kpi label="Failed / rejected" value={failed} icon={XCircle} tone={failed ? "warn" : undefined} hint="suggestion failed or rejected" />
+            </div>
+          );
+        }}
+      </Load>
       {creating && <div style={{ marginTop: 14 }}><NewSession onCreated={(id) => navigate("onboarding", id)} /></div>}
       <Card title="Sessions">
         <Load state={sessions} isEmpty={(d) => d.items.length === 0} empty="No onboarding sessions yet.">
@@ -171,6 +206,22 @@ function Detail({ id }: { id: string }) {
           return (
             <>
               <Pipeline steps={STEPS} current={step} done={step} />
+
+              <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+                <Kpi label="Sample set" value={s.sample_count} icon={FileStack} hint={`${String(a.dominant_format ?? "unknown")} · ${String(a.parsed_in_dominant_format ?? "—")} parsed`} />
+                <Kpi label="Sandbox match" value={m ? `${(m.match_rate * 100).toFixed(0)}%` : "—"} icon={Gauge}
+                  tone={!v?.result ? undefined : v.result === "PASSED" ? "ok" : v.result === "REJECTED" ? "fail" : "warn"}
+                  hint={m ? `${m.matched_samples}/${m.total_samples} samples` : "not validated yet"} />
+                <Kpi label="Proposer confidence" icon={Bot}
+                  value={typeof (s.proposal as { overall_confidence?: unknown } | null)?.overall_confidence === "number"
+                    ? ((s.proposal as { overall_confidence: number }).overall_confidence).toFixed(2) : "—"}
+                  hint={s.proposal ? providerLabel(s.proposal_source) : "no proposal yet"} />
+                <Kpi label="Fields discovered" value={Object.keys(a.fields ?? {}).length} icon={ListChecks} tone="cyan"
+                  hint={m ? `${m.unknown_fields.length} unmapped, preserved` : `${String(a.structure_variants ?? "—")} structure variant(s)`} />
+                <Kpi label="Rejected samples" value={m ? m.failed_samples : "—"} icon={XCircle} tone={m && m.failed_samples ? "warn" : undefined} hint="did not parse in the sandbox" />
+                <Kpi label="Approval" value={s.activation.active ? "Active" : s.status === "REJECTED" ? "Rejected" : "Pending"} icon={CheckCircle2}
+                  tone={s.activation.active ? "ok" : s.status === "REJECTED" ? "fail" : undefined} hint={s.activation.state.replace(/_/g, " ").toLowerCase()} />
+              </div>
 
               <div className="grid g2" style={{ marginTop: 16 }}>
                 <Card title="1 · Samples">

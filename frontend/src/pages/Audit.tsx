@@ -44,6 +44,7 @@ export function AuditPage() {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Trust · tamper-evident</div>
           <h1>Audit log</h1>
           <p>Every governance action — approvals, rejections, drift decisions, rollbacks, role and configuration changes, exports — hash-chained and verifiable.</p>
         </div>

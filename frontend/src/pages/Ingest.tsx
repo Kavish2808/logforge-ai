@@ -90,6 +90,14 @@ export function IngestPage() {
   }
 
   return (
+    <>
+    <div className="page-head">
+      <div>
+        <div className="eyebrow">Pipeline input</div>
+        <h1>Ingest Logs</h1>
+        <p>Submit raw logs through the real pipeline: detection, parsing, normalization, raw preservation and SHA-256 fingerprinting — even when parsing is incomplete.</p>
+      </div>
+    </div>
     <div className="ingest-layout">
       <div>
         <section className="panel">
@@ -270,5 +278,6 @@ export function IngestPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

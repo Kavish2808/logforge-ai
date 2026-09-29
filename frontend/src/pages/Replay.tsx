@@ -138,6 +138,7 @@ export function ReplayPage({ jobId }: { jobId: string | null }) {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Investigate · forensics</div>
           <h1>Replay &amp; Revisions</h1>
           <p>Rate-limited, resumable replay through the existing reprocess path. Every replayed event keeps its raw bytes and gains an append-only revision.</p>
         </div>

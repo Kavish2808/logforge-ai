@@ -82,6 +82,7 @@ export function Correlations({ correlationId }: { correlationId: string | null }
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Investigate</div>
           <h1 className="row">Cross-vendor correlation <span className="label-investigation">Investigation / analysis</span></h1>
           <p>Related drift from at least two vendors in the same window, scored by source diversity, change overlap, shared fields and time proximity.</p>
         </div>

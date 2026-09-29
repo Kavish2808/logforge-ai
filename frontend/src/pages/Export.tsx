@@ -72,6 +72,7 @@ export function ExportPage() {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Integrate · evidence export</div>
           <h1>Export</h1>
           <p>Stream selected events to downstream SIEM, data-lake or ML systems as versioned, integrity-carrying records.</p>
         </div>

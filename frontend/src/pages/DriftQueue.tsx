@@ -173,6 +173,7 @@ export function DriftQueue() {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Adapt · structural drift</div>
           <h1>Drift Queue</h1>
           <p>Structural changes of known sources, detected deterministically by Phase 5 and resolved only by a human.</p>
         </div>

@@ -16,6 +16,7 @@ function SourceList() {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Observed sources</div>
           <h1>Sources</h1>
           <p>Every source LogForge knows: shipped vendor and generic adapters, and sources learned through onboarding.</p>
         </div>
