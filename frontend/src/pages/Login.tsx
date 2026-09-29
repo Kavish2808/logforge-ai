@@ -1,10 +1,11 @@
 // Sign-in landing. Uses the existing auth contract only: GET /auth/status, POST /auth/bootstrap (the server
 // refuses it once any user exists) and POST /auth/login. Roles are assigned by a SOC_ADMIN, never chosen here.
 import { FormEvent, useState } from "react";
-import { ArrowRight, Braces, Brain, Database, Fingerprint, Hexagon, KeyRound, Layers, LoaderCircle, Lock, Radar, ShieldCheck } from "lucide-react";
+import { ArrowRight, Braces, Brain, Database, Fingerprint, KeyRound, Layers, LoaderCircle, Lock, Moon, Radar, ShieldCheck, Sun } from "lucide-react";
 import { bootstrapAdmin, getAuthStatus, login } from "../api/endpoints";
 import { setAuth, useAuth } from "../lib/auth";
 import { errorMessage, useApi } from "../lib/useApi";
+import { useTheme } from "../lib/theme";
 
 const FLOW = [
   { icon: Radar, name: "Detect", text: "Format & vendor fingerprinting" },
@@ -18,6 +19,7 @@ const FLOW = [
 export function LoginPage({ onEnter }: { onEnter: () => void }) {
   const status = useApi((s) => getAuthStatus(s), []);
   const { user } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,13 +44,27 @@ export function LoginPage({ onEnter }: { onEnter: () => void }) {
   };
 
   return (
-    <div className="login">
+    <div className="login" style={{ position: "relative" }}>
+      <div style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}>
+        <button
+          type="button"
+          className="icon-button"
+          title={theme === "dark" ? "Switch to white background" : "Switch to dark background"}
+          aria-label="Toggle background theme"
+          onClick={toggleTheme}
+        >
+          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+      </div>
       <section className="login-story" aria-label="LogForge AI">
         <div className="login-brand">
-          <div className="brand-mark" aria-hidden="true"><Hexagon size={22} strokeWidth={2.4} /></div>
+          <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true" style={{ borderRadius: 9, flexShrink: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.18)" }}>
+            <rect width="40" height="40" rx="11" fill="#ffffff" />
+            <path d="M10 10h9v5h-4v10h10v-4h5v9H10zm12 0h8v8h-5v-3h-3z" fill="#090b10" />
+          </svg>
           <div>
-            <div className="bn">LOGFORGE <span style={{ color: "var(--cyan)" }}>AI</span></div>
-            <div className="bs">Universal Adaptive Log Pre-processing Framework</div>
+            <div className="bn">LOGFORGE</div>
+            <div className="bs">Platform Console</div>
           </div>
         </div>
         <div className="login-hero">
