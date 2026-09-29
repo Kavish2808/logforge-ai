@@ -82,6 +82,54 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
                 }
         raise RequestValidationError([{"loc": ("body",), "msg": "Invalid JSON or CSV body", "type": "json_invalid"}])
 
+    if isinstance(body, list):
+        # Direct JSON array payload e.g. [{"time": ...}, {"time": ...}] or [{"raw_log": ...}]
+        raw_lines: list[str] = []
+        for item in body:
+            if isinstance(item, dict):
+                if "raw_log" in item:
+                    raw_lines.append(str(item["raw_log"]))
+                elif "raw" in item:
+                    raw_lines.append(str(item["raw"]))
+                else:
+                    raw_lines.append(json.dumps(item))
+            elif isinstance(item, str) and item.strip():
+                raw_lines.append(item.strip())
+            else:
+                raw_lines.append(json.dumps(item))
+
+        if not raw_lines:
+            return {"accepted": 0, "duplicates": 0, "total": 0}
+
+        for idx, line in enumerate(raw_lines):
+            if len(line) > MAX_RAW_LOG_LENGTH:
+                raw_lines[idx] = line[:MAX_RAW_LOG_LENGTH - 16] + "...[TRUNCATED]"
+            if "\x00" in line:
+                raw_lines[idx] = line.replace("\x00", "")
+
+        total_accepted = 0
+        all_results = []
+        s_count, p_count, f_count = 0, 0, 0
+        chunk_size = 1000
+        for i in range(0, len(raw_lines), chunk_size):
+            chunk = raw_lines[i:i + chunk_size]
+            outcome = ingestion_service.ingest_batch(db, chunk, source=source_header)
+            total_accepted += len(outcome.results)
+            s_count += outcome.success_count
+            p_count += outcome.partial_count
+            f_count += outcome.failed_count
+            all_results.extend(outcome.results)
+
+        return {
+            "accepted": total_accepted,
+            "duplicates": 0,
+            "total": len(raw_lines),
+            "success_count": s_count,
+            "partial_count": p_count,
+            "failed_count": f_count,
+            "results": all_results[:100] if len(all_results) > 100 else all_results,
+        }
+
     if isinstance(body, dict) and "events" in body:
         # Flexible multi-event format from console
         console = _validate(_ConsoleIngestRequest, raw_body)
@@ -90,20 +138,43 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
         if not raw_lines:
             return {"accepted": 0, "duplicates": 0, "total": 0}
 
-        # Unnest/flatten any multi-line blocks (e.g. multi-line CSV/log payload passed inside a single event slot)
+        # Unnest/flatten any multi-line blocks, preserving multi-line JSON intact
         flattened_lines: list[str] = []
         for line in raw_lines:
-            if isinstance(line, str) and ("\n" in line or "\r" in line):
-                for sub in line.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            if not isinstance(line, str):
+                flattened_lines.append(json.dumps(line) if isinstance(line, (dict, list)) else str(line))
+                continue
+
+            line_clean = line.strip()
+            if not line_clean:
+                continue
+
+            # Check if line_clean is a complete JSON object or array
+            if (line_clean.startswith("{") and line_clean.endswith("}")) or (line_clean.startswith("[") and line_clean.endswith("]")):
+                try:
+                    parsed_item = json.loads(line_clean)
+                    if isinstance(parsed_item, dict):
+                        # Multi-line or single-line JSON object: keep intact as one event
+                        flattened_lines.append(line_clean)
+                        continue
+                    elif isinstance(parsed_item, list):
+                        # JSON array: unroll each element
+                        for sub_elem in parsed_item:
+                            if isinstance(sub_elem, (dict, list)):
+                                flattened_lines.append(json.dumps(sub_elem))
+                            elif isinstance(sub_elem, str) and sub_elem.strip():
+                                flattened_lines.append(sub_elem.strip())
+                        continue
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+            if "\n" in line_clean or "\r" in line_clean:
+                for sub in line_clean.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
                     sub_clean = sub.strip()
                     if sub_clean:
                         flattened_lines.append(sub_clean)
-            elif isinstance(line, str):
-                line_clean = line.strip()
-                if line_clean:
-                    flattened_lines.append(line_clean)
             else:
-                flattened_lines.append(str(line))
+                flattened_lines.append(line_clean)
         raw_lines = flattened_lines
         if not raw_lines:
             return {"accepted": 0, "duplicates": 0, "total": 0}
@@ -143,20 +214,44 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
     
     # Standard single IngestRequest
     single = _validate(IngestRequest, raw_body)
-    # Check if a single raw_log contains multiple lines (e.g. pasted CSV block)
+    # Check if a single raw_log contains multiple lines (e.g. pasted CSV block or JSON array)
     if "\n" in single.raw_log:
-        split_lines = [l.strip() for l in single.raw_log.splitlines() if l.strip()]
-        if len(split_lines) > 1:
-            outcome = ingestion_service.ingest_batch(db, split_lines, source=single.source_hint or source_header)
-            return {
-                "accepted": len(outcome.results),
-                "duplicates": 0,
-                "total": outcome.total,
-                "success_count": outcome.success_count,
-                "partial_count": outcome.partial_count,
-                "failed_count": outcome.failed_count,
-                "results": outcome.results,
-            }
+        clean = single.raw_log.strip()
+        is_single_json = False
+        if (clean.startswith("{") and clean.endswith("}")) or (clean.startswith("[") and clean.endswith("]")):
+            try:
+                parsed_j = json.loads(clean)
+                if isinstance(parsed_j, dict):
+                    # Multi-line JSON object: do not split!
+                    is_single_json = True
+                elif isinstance(parsed_j, list):
+                    split_lines = [json.dumps(x) if isinstance(x, (dict, list)) else str(x) for x in parsed_j]
+                    outcome = ingestion_service.ingest_batch(db, split_lines, source=single.source_hint or source_header)
+                    return {
+                        "accepted": len(outcome.results),
+                        "duplicates": 0,
+                        "total": outcome.total,
+                        "success_count": outcome.success_count,
+                        "partial_count": outcome.partial_count,
+                        "failed_count": outcome.failed_count,
+                        "results": outcome.results,
+                    }
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        if not is_single_json:
+            split_lines = [l.strip() for l in single.raw_log.splitlines() if l.strip()]
+            if len(split_lines) > 1:
+                outcome = ingestion_service.ingest_batch(db, split_lines, source=single.source_hint or source_header)
+                return {
+                    "accepted": len(outcome.results),
+                    "duplicates": 0,
+                    "total": outcome.total,
+                    "success_count": outcome.success_count,
+                    "partial_count": outcome.partial_count,
+                    "failed_count": outcome.failed_count,
+                    "results": outcome.results,
+                }
     return ingestion_service.ingest_raw_log(db, single.raw_log, source=single.source_hint)
 
 

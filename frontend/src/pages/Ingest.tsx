@@ -30,21 +30,27 @@ function parseInput(raw: string, mode: string) {
   const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
   if (!normalized) return [];
 
-  if (mode === "JSON array") {
+  // Check if the payload is a valid JSON object or JSON array first
+  if (normalized.startsWith("{") || normalized.startsWith("[")) {
     try {
-      const a = JSON.parse(normalized);
-      if (Array.isArray(a)) {
-        return a.map((v) => ({ raw: typeof v === "string" ? v : JSON.stringify(v) }));
+      const parsed = JSON.parse(normalized);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => ({
+          raw: typeof v === "string" ? v : JSON.stringify(v),
+        }));
+      } else if (typeof parsed === "object" && parsed !== null) {
+        // Multi-line or single-line JSON object: return intact as one event
+        return [{ raw: normalized }];
       }
     } catch {
-      // fallback to line-by-line below if not a valid JSON array
+      // If it's invalid JSON (e.g. NDJSON or multiple objects), fall through to line parsing
     }
   }
 
   const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
 
   // If input has multiple lines and contains commas, treat as CSV rows
-  if (mode === "CSV / Tabular rows" || (lines.length > 1 && lines[0].includes(","))) {
+  if (mode === "CSV / Tabular rows" || (mode !== "Single event" && lines.length > 1 && lines[0].includes(","))) {
     if (lines.length > 1 && lines[0].includes(",")) {
       const headers = lines[0].split(",").map((h) => h.trim().replace(/^["']|["']$/g, ""));
       return lines.slice(1).map((line) => {
@@ -56,6 +62,11 @@ function parseInput(raw: string, mode: string) {
         return { raw: JSON.stringify(obj) };
       });
     }
+  }
+
+  // If mode is explicitly Single event, don't split by line
+  if (mode === "Single event") {
+    return [{ raw: normalized }];
   }
 
   // If input has multiple lines, split into one event per line

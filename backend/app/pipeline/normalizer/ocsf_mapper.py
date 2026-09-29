@@ -133,12 +133,25 @@ def normalize(parsed_fields: dict[str, Any], adapter: AdapterMapping) -> Normali
     if adapter.event_action_field:
         raw = parsed_fields.get(adapter.event_action_field)
         event_action = str(raw) if raw is not None else None
+    if event_action is None:
+        for candidate in ("action", "event_action", "eventName", "activity", "event", "command", "operation", "method"):
+            if candidate in parsed_fields and parsed_fields[candidate] is not None:
+                event_action = str(parsed_fields[candidate])
+                consumed_keys.add(candidate)
+                break
 
     severity: str | None = None
     if adapter.severity_field:
         raw_severity = parsed_fields.get(adapter.severity_field)
         if raw_severity is not None:
             severity = adapter.severity_map.get(str(raw_severity), str(raw_severity))
+    if severity is None:
+        for candidate in ("level", "log_level", "severity", "priority", "loglevel"):
+            if candidate in parsed_fields and parsed_fields[candidate] is not None:
+                raw_s = str(parsed_fields[candidate])
+                severity = adapter.severity_map.get(raw_s, raw_s)
+                consumed_keys.add(candidate)
+                break
 
     product_version: str | None = None
     if adapter.product_version_field:
@@ -151,6 +164,14 @@ def normalize(parsed_fields: dict[str, Any], adapter: AdapterMapping) -> Normali
         event_timestamp, ts_warning = parse_timestamp(raw_ts, adapter.timestamp_format)
         if ts_warning:
             warnings.append(ts_warning)
+    if event_timestamp is None:
+        for candidate in ("time", "@timestamp", "eventTime", "datetime", "date", "ts", "timestamp"):
+            if candidate in parsed_fields and parsed_fields[candidate]:
+                dt, _ = parse_timestamp(str(parsed_fields[candidate]))
+                if dt is not None:
+                    event_timestamp = dt
+                    consumed_keys.add(candidate)
+                    break
 
     for key, value in adapter.static_fields.items():
         flat[key] = value

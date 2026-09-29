@@ -34,13 +34,13 @@ def detect_format(raw_log: str) -> FormatType:
 
 
 def _looks_like_json(text: str) -> bool:
-    if not (text.startswith("{") and text.endswith("}")):
+    if not ((text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]"))):
         return False
     try:
         parsed = json.loads(text)
     except (json.JSONDecodeError, ValueError):
         return False
-    return isinstance(parsed, dict)
+    return isinstance(parsed, (dict, list))
 
 
 # --------------------------------------------------------------------------

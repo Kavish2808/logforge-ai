@@ -21,9 +21,56 @@ timestamp_field: timestamp
 
 field_map:
   message: { target: "event_message" }
+  msg: { target: "event_message" }
+  log: { target: "event_message" }
+  detail: { target: "event_message" }
+  description: { target: "event_message" }
+
   src_ip: { target: "network.src_ip" }
+  client_ip: { target: "network.src_ip" }
+  sourceIP: { target: "network.src_ip" }
+  sourceIPAddress: { target: "network.src_ip" }
+  srcip: { target: "network.src_ip" }
+  source_ip: { target: "network.src_ip" }
+  clientip: { target: "network.src_ip" }
+  remote_addr: { target: "network.src_ip" }
+  ip: { target: "network.src_ip" }
+
   dst_ip: { target: "network.dst_ip" }
+  dest_ip: { target: "network.dst_ip" }
+  destinationIP: { target: "network.dst_ip" }
+  destinationIPAddress: { target: "network.dst_ip" }
+  dstip: { target: "network.dst_ip" }
+  server_ip: { target: "network.dst_ip" }
+
   src_port: { target: "network.src_port", type: "int" }
+  source_port: { target: "network.src_port", type: "int" }
+  srcport: { target: "network.src_port", type: "int" }
+  sport: { target: "network.src_port", type: "int" }
+
   dst_port: { target: "network.dst_port", type: "int" }
+  dest_port: { target: "network.dst_port", type: "int" }
+  dstport: { target: "network.dst_port", type: "int" }
+  dport: { target: "network.dst_port", type: "int" }
+
   protocol: { target: "network.protocol" }
+  proto: { target: "network.protocol" }
+  direction: { target: "network.direction" }
+
   user: { target: "user.name" }
+  username: { target: "user.name" }
+  user_name: { target: "user.name" }
+  userId: { target: "user.uid" }
+  user_id: { target: "user.uid" }
+
+  status: { target: "http_status", type: "int" }
+  status_code: { target: "http_status", type: "int" }
+  statusCode: { target: "http_status", type: "int" }
+  method: { target: "http_method" }
+  http_method: { target: "http_method" }
+  url: { target: "url" }
+  path: { target: "url_path" }
+  uri: { target: "url_path" }
+  user_agent: { target: "user_agent" }
+  userAgent: { target: "user_agent" }
+  host: { target: "host" }

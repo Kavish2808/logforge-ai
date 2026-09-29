@@ -15,6 +15,14 @@ class JSONParser(BaseParser):
             raise ParserError(f"Invalid JSON: {exc}") from exc
 
         if not isinstance(data, dict):
-            raise ParserError("JSON log must be an object at the top level")
+            if isinstance(data, list):
+                if len(data) == 1 and isinstance(data[0], dict):
+                    data = data[0]
+                elif data and all(isinstance(x, dict) for x in data):
+                    data = {"items": data, "count": len(data), "message": f"Array of {len(data)} events"}
+                else:
+                    raise ParserError("JSON log must be an object at the top level")
+            else:
+                raise ParserError("JSON log must be an object at the top level")
 
         return ParseResult(fields=data, format_detected=self.format_name, warnings=[])
