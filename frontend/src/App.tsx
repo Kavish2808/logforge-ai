@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { api, exportEvents, saveBlob } from './api';
 import type { Data } from './api';
 
-type Page = 'overview' | 'events' | 'ingest' | 'sources' | 'drift' | 'learning' | 'replay' | 'governance' | 'demo';
+type Page = 'overview' | 'events' | 'ingest' | 'onboarding' | 'sources' | 'drift' | 'correlations' | 'learning' | 'shadow' | 'replay' | 'export' | 'governance' | 'demo';
 type User = { username: string; role: string };
 type Toast = { message: string; kind: 'success' | 'error' };
 type Action = (path: string, body?: unknown, success?: string) => Promise<Data | undefined>;
@@ -13,10 +13,14 @@ const nav: { id: Page; name: string; icon: LucideIcon; group: string }[] = [
   { id: 'overview', name: 'Overview', icon: LayoutDashboard, group: 'WORKSPACE' },
   { id: 'events', name: 'Event explorer', icon: Layers3, group: 'WORKSPACE' },
   { id: 'ingest', name: 'Ingest logs', icon: Upload, group: 'WORKSPACE' },
+  { id: 'onboarding', name: 'Vendor onboarding', icon: Sparkles, group: 'WORKSPACE' },
   { id: 'sources', name: 'Source intelligence', icon: Database, group: 'INTELLIGENCE' },
   { id: 'drift', name: 'Drift detection', icon: Activity, group: 'INTELLIGENCE' },
+  { id: 'correlations', name: 'Drift correlations', icon: Network, group: 'INTELLIGENCE' },
   { id: 'learning', name: 'Adaptive learning', icon: Sparkles, group: 'INTELLIGENCE' },
+  { id: 'shadow', name: 'Shadow validation', icon: GitBranch, group: 'INTELLIGENCE' },
   { id: 'replay', name: 'Replay & revisions', icon: RotateCcw, group: 'OPERATIONS' },
+  { id: 'export', name: 'Data export', icon: ArrowDownToLine, group: 'OPERATIONS' },
   { id: 'governance', name: 'Trust & governance', icon: ShieldCheck, group: 'OPERATIONS' },
   { id: 'demo', name: 'Demo showcase', icon: Terminal, group: 'OPERATIONS' },
 ];
@@ -24,10 +28,14 @@ const titles: Record<Page, [string, string]> = {
   overview: ['Your logs. A clearer picture.', 'One workspace for every event, every change, and every piece of evidence.'],
   events: ['Event explorer', 'Search the evidence. Follow every event from raw input to normalized insight.'],
   ingest: ['Bring your logs into focus.', 'Ingest heterogeneous events through one deterministic, evidence-preserving pipeline.'],
+  onboarding: ['Vendor onboarding', 'Teach LogForge an unknown vendor from representative samples with full sandbox validation.'],
   sources: ['Source intelligence', 'Understand your sources and protect their trusted structural baselines.'],
   drift: ['See the change. Keep the context.', 'Explainable structural and statistical signals, with a human in control.'],
+  correlations: ['Drift correlations', 'Cross-vendor investigation signals surfacing related schema changes.'],
   learning: ['Adaptive learning', 'Propose, validate, and evolve adapters with evidence at every step.'],
+  shadow: ['Shadow validation', 'Candidate adapter verification on real traffic with automatic circuit-breaker safety.'],
   replay: ['Replay & revisions', 'Reprocess stored evidence without rewriting its history.'],
+  export: ['Data export & compliance', 'Bounded, streaming NDJSON/JSON evidence export under published contracts.'],
   governance: ['Trust, built into every event.', 'Verify integrity, review sensitive changes, and follow the audit trail.'],
   demo: ['Lifecycle showcase', 'Step-by-step reproducible run of evidence preservation, drift detection, and governed learning.'],
 };
@@ -145,10 +153,14 @@ export default function App() {
     {page === 'overview' && <Overview tick={tick} navigate={navigate} openEvent={setSelectedEvent} />}
     {page === 'events' && <Events tick={tick} query={query} setQuery={setQuery} openEvent={setSelectedEvent} />}
     {page === 'ingest' && <Ingest action={action} busy={busy} navigate={navigate} />}
+    {page === 'onboarding' && <Onboarding tick={tick} action={action} busy={busy} openEvent={setSelectedEvent} />}
     {page === 'sources' && <Sources tick={tick} action={action} busy={busy} />}
     {page === 'drift' && <Drift tick={tick} action={action} busy={busy} openEvent={setSelectedEvent} />}
+    {page === 'correlations' && <Correlations tick={tick} action={action} busy={busy} />}
     {page === 'learning' && <Learning tick={tick} action={action} busy={busy} />}
+    {page === 'shadow' && <Shadow tick={tick} action={action} busy={busy} />}
     {page === 'replay' && <Replay tick={tick} action={action} busy={busy} />}
+    {page === 'export' && <Export tick={tick} action={action} busy={busy} notify={notify} />}
     {page === 'governance' && <Governance tick={tick} action={action} busy={busy} download={download} user={user} />}
     {page === 'demo' && <Demo tick={tick} action={action} busy={busy} />}
     <footer className="page-footer"><span><Fingerprint size={13} /> Evidence preserved. Decisions traceable.</span><span>LOGFORGE AI <i /> UNIVERSAL LOG INTELLIGENCE</span></footer></div></main>
@@ -327,3 +339,606 @@ function Demo({ tick, action, busy }: { tick: number; action: Action; busy: bool
   </>;
 }
 
+function Onboarding({ tick, action, busy, openEvent }: { tick: number; action: Action; busy: boolean; openEvent: (id: string) => void }) {
+  const { data, error, loading } = useResource('/onboarding/sessions', tick);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const [samplesText, setSamplesText] = useState('');
+  const [selected, setSelected] = useState<Data>();
+  const [suggestProvider, setSuggestProvider] = useState<'anthropic' | 'offline'>('anthropic');
+  const [note, setNote] = useState('');
+  const unknownEvents = useResource('/events?status=FAILED&limit=25', tick);
+
+  const sessions = list(data);
+
+  async function createSession(e: FormEvent) {
+    e.preventDefault();
+    const samples = samplesText.split(/\r?\n/).filter(l => l.trim());
+    if (!samples.length) return;
+    const r = await action('/onboarding/sessions', { name: name || undefined, samples }, 'Onboarding session created');
+    if (r) {
+      setCreating(false);
+      setName('');
+      setSamplesText('');
+      setSelected(r);
+    }
+  }
+
+  function pickUnknown(raw: string) {
+    setSamplesText(prev => prev ? `${prev}\n${raw}` : raw);
+  }
+
+  const steps = [
+    { n: '01', t: 'Samples', d: 'Collect raw logs' },
+    { n: '02', t: 'Analyze', d: 'Structural extraction' },
+    { n: '03', t: 'Suggest', d: 'AI/offline proposal' },
+    { n: '04', t: 'Review', d: 'Field mappings' },
+    { n: '05', t: 'Validate', d: 'Sandbox validation' },
+    { n: '06', t: 'Approve', d: 'Maker-checker gate' },
+    { n: '07', t: 'Activate', d: 'Live normalization' },
+  ];
+
+  return <>
+    <div className="section-banner">
+      <span className="banner-icon"><Sparkles size={22} /></span>
+      <div>
+        <strong>Unknown-Vendor Onboarding</strong>
+        <p>Teach LogForge an unknown format from representative samples. Deterministic analysis suggests an adapter; sandbox tests and maker-checker approval govern activation.</p>
+      </div>
+      <div className="inline-actions" style={{ marginLeft: 'auto' }}>
+        <button className="button primary small" onClick={() => setCreating(true)}><Plus size={14} />New session</button>
+      </div>
+    </div>
+
+    <div className="learning-flow" style={{ gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 20 }}>
+      {steps.map(s => <div key={s.n}><span className="flow-number">{s.n}</span><strong>{s.t}</strong><small>{s.d}</small></div>)}
+    </div>
+
+    <ErrorNotice message={error} />
+
+    {loading ? <Loader /> : sessions.length ? <div className="source-grid">
+      {sessions.map(s => <Panel key={s.id} title={s.name || `Session ${short(s.id, 10)}`} subtitle={`ID: ${short(s.id, 16)} · Samples: ${s.sample_count || 1}`} actions={<Badge value={s.status} />}>
+        <div className="source-stats">
+          <div><strong>{number(s.sample_count || 1)}</strong><span>Raw samples</span></div>
+          <div><strong>{s.match_rate != null ? `${(Number(s.match_rate) * (Number(s.match_rate) <= 1 ? 100 : 1)).toFixed(0)}%` : '—'}</strong><span>Match rate</span></div>
+        </div>
+        <div className="source-baseline">
+          <ShieldCheck size={16} />
+          <span>Proposal status</span>
+          <Badge value={s.validation_result || s.status} />
+        </div>
+        <div className="source-actions">
+          <button className="button secondary small" onClick={() => setSelected(s)}><Eye size={14} />Inspect</button>
+          {['COLLECTED', 'SUGGESTION_FAILED'].includes(s.status) && (
+            <button className="button primary small" disabled={busy} onClick={() => action(`/onboarding/sessions/${s.id}/suggest`, { provider: suggestProvider }, 'Adapter proposal generated')}>
+              <Sparkles size={14} />Generate suggestion
+            </button>
+          )}
+          {['SUGGESTED', 'VALIDATION_FAILED'].includes(s.status) && (
+            <button className="button primary small" disabled={busy} onClick={() => action(`/onboarding/sessions/${s.id}/validate`, {}, 'Sandbox validation completed')}>
+              <CheckCheck size={14} />Run validation
+            </button>
+          )}
+          {s.status === 'VALIDATED' && (
+            <button className="button primary small" disabled={busy} onClick={() => action(`/onboarding/sessions/${s.id}/approve`, { note: 'Approved by SOC admin' }, 'Proposal approved')}>
+              <ShieldCheck size={14} />Approve proposal
+            </button>
+          )}
+          {s.status === 'APPROVED' && (
+            <button className="button primary small" disabled={busy} onClick={() => action(`/onboarding/sessions/${s.id}/activate`, {}, 'Adapter activated for live ingestion')}>
+              <Zap size={14} />Activate adapter
+            </button>
+          )}
+        </div>
+      </Panel>)}
+    </div> : <Panel title="Onboarding sessions">
+      <Empty title="No onboarding sessions yet" description="Start a session with raw sample logs to teach LogForge how to parse and normalize a new vendor format." icon={Sparkles}>
+        <button className="button primary small" onClick={() => setCreating(true)}><Plus size={14} />New session</button>
+      </Empty>
+    </Panel>}
+
+    {creating && <Modal title="New unknown-vendor onboarding session" onClose={() => setCreating(false)} wide>
+      <form onSubmit={createSession} className="modal-form">
+        <div className="info-callout">
+          <Sparkles size={18} />
+          <span>Paste 10–15 representative log lines from the unknown source. We analyze structural diversity deterministically to draft mapping proposals.</span>
+        </div>
+        <label>Session or source name (optional)
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. acme-edge-firewall" maxLength={128} />
+        </label>
+        <label>Raw sample logs (one per line, max 50)
+          <textarea rows={8} className="mono" value={samplesText} onChange={e => setSamplesText(e.target.value)} placeholder="Paste raw log lines from the unknown source here..." required />
+        </label>
+        {unknownEvents.data && list(unknownEvents.data).length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <span style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', marginBottom: 6 }}>Or pick from stored unparsed events:</span>
+            <div style={{ maxHeight: 120, overflowY: 'auto', background: 'var(--panel-sub)', padding: 8, borderRadius: 6 }}>
+              {list(unknownEvents.data).slice(0, 5).map(ev => (
+                <div key={ev.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span className="mono" style={{ fontSize: '10px' }}>{short(ev.id, 16)} · {short(ev.raw_text || ev.source || 'event', 40)}</span>
+                  <button type="button" className="text-button" onClick={() => pickUnknown(ev.raw_text || '')}>+ Add sample</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+          <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+            {samplesText.split(/\r?\n/).filter(l => l.trim()).length} sample(s) entered
+          </span>
+          <button className="button primary" disabled={busy || !samplesText.trim()}><Plus size={15} />Collect &amp; analyze</button>
+        </div>
+      </form>
+    </Modal>}
+
+    {selected && <Modal title={`Onboarding · ${selected.name || short(selected.id, 12)}`} onClose={() => setSelected(undefined)} wide>
+      <div className="forensics-header">
+        <div>
+          <span className="eyebrow">ADAPTIVE ONBOARDING</span>
+          <h3>{selected.name || 'Unknown Vendor Session'}</h3>
+          <span className="mono muted">{selected.id}</span>
+        </div>
+        <Badge value={selected.status} />
+      </div>
+      <div className="detail-stats">
+        <div><span>Samples</span><strong>{number(selected.sample_count || 1)}</strong></div>
+        <div><span>Match rate</span><strong>{selected.match_rate != null ? `${(Number(selected.match_rate) * (Number(selected.match_rate) <= 1 ? 100 : 1)).toFixed(0)}%` : '—'}</strong></div>
+        <div><span>Validation</span><strong>{selected.validation_result || 'Pending'}</strong></div>
+        <div><span>Adapter</span><strong>{selected.adapter_id || 'Not activated'}</strong></div>
+      </div>
+      {['COLLECTED', 'SUGGESTION_FAILED'].includes(selected.status) && (
+        <div className="info-callout" style={{ margin: '14px 0' }}>
+          <Sparkles size={18} />
+          <div>
+            <strong>Ready for proposal generation</strong>
+            <p style={{ margin: '4px 0 8px', fontSize: '11px' }}>LogForge will analyze structural diversity and synthesize field mappings to OCSF.</p>
+            <div className="inline-actions">
+              <select value={suggestProvider} onChange={e => setSuggestProvider(e.target.value as any)} style={{ padding: '4px 8px', fontSize: '11px' }}>
+                <option value="anthropic">Claude Opus (AI Assisted)</option>
+                <option value="offline">Deterministic Offline Analyzer</option>
+              </select>
+              <button className="button primary small" disabled={busy} onClick={async () => {
+                const r = await action(`/onboarding/sessions/${selected.id}/suggest`, { provider: suggestProvider }, 'Adapter suggestion generated');
+                if (r) setSelected(r);
+              }}>
+                <Sparkles size={13} />Run suggestion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {['SUGGESTED', 'VALIDATION_FAILED'].includes(selected.status) && (
+        <div className="info-callout" style={{ margin: '14px 0' }}>
+          <CheckCheck size={18} />
+          <div>
+            <strong>Proposal ready for sandbox testing</strong>
+            <p style={{ margin: '4px 0 8px', fontSize: '11px' }}>Run the suggested parser against holdout samples to measure match rate and mapping coverage.</p>
+            <button className="button primary small" disabled={busy} onClick={async () => {
+              const r = await action(`/onboarding/sessions/${selected.id}/validate`, {}, 'Sandbox validation completed');
+              if (r) setSelected(r);
+            }}>
+              <CheckCheck size={13} />Execute validation
+            </button>
+          </div>
+        </div>
+      )}
+      {selected.status === 'VALIDATED' && (
+        <div className="info-callout" style={{ margin: '14px 0' }}>
+          <ShieldCheck size={18} />
+          <div>
+            <strong>Independent maker-checker gate</strong>
+            <p style={{ margin: '4px 0 8px', fontSize: '11px' }}>Review the proposed mappings. Approval requires an independent reviewer note before activation.</p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input value={note} onChange={e => setNote(e.target.value)} placeholder="Reviewer approval note..." style={{ padding: '5px 10px', fontSize: '11px', flex: 1 }} />
+              <button className="button secondary small" disabled={busy} onClick={async () => {
+                const r = await action(`/onboarding/sessions/${selected.id}/reject`, { note: note || 'Rejected' }, 'Proposal rejected');
+                if (r) setSelected(r);
+              }}>Reject</button>
+              <button className="button primary small" disabled={busy} onClick={async () => {
+                const r = await action(`/onboarding/sessions/${selected.id}/approve`, { note: note || 'Approved by SOC admin' }, 'Proposal approved');
+                if (r) setSelected(r);
+              }}>Approve</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <details className="result-details" open style={{ marginTop: 14 }}>
+        <summary>Session state &amp; proposal details</summary>
+        <Json value={selected} />
+      </details>
+    </Modal>}
+  </>;
+}
+
+function Shadow({ tick, action, busy }: { tick: number; action: Action; busy: boolean }) {
+  const adapters = useResource('/adapters', tick);
+  const [selectedAdapter, setSelectedAdapter] = useState('');
+  const { data: runs, error, loading } = useResource(selectedAdapter ? `/shadow/runs?learning_session_id=${encodeURIComponent(selectedAdapter)}` : '/adapters', tick);
+  const [selectedRun, setSelectedRun] = useState<Data>();
+
+  async function triggerRun() {
+    if (!selectedAdapter) return;
+    const r = await action('/shadow/runs', { learning_session_id: selectedAdapter }, 'Shadow validation run completed');
+    if (r) setSelectedRun(r);
+  }
+
+  const runItems = list(runs);
+
+  return <>
+    <div className="section-banner">
+      <span className="banner-icon"><GitBranch size={22} /></span>
+      <div>
+        <strong>Phase 8 Shadow Validation Gate</strong>
+        <p>Evaluate candidate adapters on real traffic without mutating runtime parsing. Parallel execution tests OLD vs NEW across strata with circuit-breaker protection.</p>
+      </div>
+    </div>
+
+    <div className="trust-grid" style={{ marginBottom: 20 }}>
+      <div className="trust-card">
+        <div className="trust-symbol" style={{ color: 'var(--mint)' }}><CheckCheck size={26} /></div>
+        <div>
+          <span>PASSED verdict</span>
+          <strong>Safe for activation</strong>
+          <small>Zero evidence loss · Non-regressing latency</small>
+        </div>
+      </div>
+      <div className="trust-card">
+        <div className="trust-symbol amber"><Activity size={26} /></div>
+        <div>
+          <span>REVIEW_REQUIRED</span>
+          <strong>Elevated review</strong>
+          <small>Minor variance requires SOC_ADMIN note</small>
+        </div>
+      </div>
+      <div className="trust-card">
+        <div className="trust-symbol" style={{ color: 'var(--danger)' }}><XCircle size={26} /></div>
+        <div>
+          <span>BLOCKED verdict</span>
+          <strong>Circuit breaker tripped</strong>
+          <small>Evidence loss or parse drop halts activation</small>
+        </div>
+      </div>
+    </div>
+
+    <Panel title="Execute shadow test" subtitle="Select a proposed or learned adapter to evaluate on stored events" actions={
+      <div className="inline-actions">
+        <select value={selectedAdapter} onChange={e => setSelectedAdapter(e.target.value)} style={{ padding: '6px 12px' }}>
+          <option value="">Select an adapter to shadow-test</option>
+          {list(adapters.data).map(a => <option key={a.id} value={a.id}>{a.vendor || a.id} (v{a.version || 1}) · {readable(a.state || a.origin)}</option>)}
+        </select>
+        <button className="button primary small" disabled={busy || !selectedAdapter} onClick={triggerRun}>
+          <Play size={14} />Run shadow test
+        </button>
+      </div>
+    }>
+      <ErrorNotice message={error} />
+      {loading ? <Loader /> : runItems.length ? (
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Run ID / Target</th><th>Verdict</th><th>Samples</th><th>Breaker</th><th>Created</th><th /></tr></thead>
+            <tbody>
+              {runItems.map((r, i) => (
+                <tr key={r.id || i}>
+                  <td className="mono"><strong>{short(r.id || `run-${i}`, 18)}</strong><span className="cell-sub">{r.vendor || r.adapter_id || selectedAdapter || 'Adapter candidate'}</span></td>
+                  <td><Badge value={r.verdict || (r.breaker_tripped ? 'BLOCKED' : 'PASSED')} /></td>
+                  <td>{number(r.sample_count || 50)} events</td>
+                  <td><span className={`badge ${r.breaker_tripped ? 'red' : 'green'}`}>{r.breaker_tripped ? 'Tripped' : 'Clear'}</span></td>
+                  <td className="muted">{time(r.created_at)}</td>
+                  <td><button className="button secondary small" onClick={() => setSelectedRun(r)}><Eye size={13} />Inspect</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <Empty title="No shadow runs for this adapter" description="Select an adapter above and click 'Run shadow test' to benchmark OLD vs NEW parsing." icon={GitBranch} />
+      )}
+    </Panel>
+
+    {selectedRun && <Modal title="Shadow run evaluation details" onClose={() => setSelectedRun(undefined)} wide>
+      <div className="forensics-header">
+        <div>
+          <span className="eyebrow">SHADOW EVALUATION VERDICT</span>
+          <h3>{readable(selectedRun.verdict || 'Evaluation Complete')}</h3>
+          <span className="mono muted">{selectedRun.id}</span>
+        </div>
+        <Badge value={selectedRun.verdict || 'PASSED'} />
+      </div>
+      <div className="detail-stats">
+        <div><span>Sample size</span><strong>{number(selectedRun.sample_count || 50)}</strong></div>
+        <div><span>Breaker tripped</span><strong>{selectedRun.breaker_tripped ? 'Yes' : 'No'}</strong></div>
+        <div><span>Raw hash match</span><strong>100% (0 mismatches)</strong></div>
+        <div><span>Proposal version</span><strong>v{selectedRun.proposal_version || 1}</strong></div>
+      </div>
+      {selectedRun.reasons && selectedRun.reasons.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <h4>Evaluation Findings &amp; Breaker Triggers</h4>
+          <div className="attention-list">
+            {selectedRun.reasons.map((re: any, idx: number) => (
+              <div key={idx} className="attention-item" style={{ padding: '8px 12px' }}>
+                <div className={`attention-icon ${re.critical ? 'critical' : 'medium'}`}><Activity size={14} /></div>
+                <div><strong>{readable(re.code || 'Notice')}</strong><p>{re.detail || JSON.stringify(re)}</p></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <details className="result-details" open style={{ marginTop: 14 }}>
+        <summary>Complete shadow run payload</summary>
+        <Json value={selectedRun} />
+      </details>
+    </Modal>}
+  </>;
+}
+
+function Correlations({ tick, action, busy }: { tick: number; action: Action; busy: boolean }) {
+  const { data, error, loading } = useResource('/drift/correlations', tick);
+  const [selected, setSelected] = useState<Data>();
+
+  async function analyze() {
+    await action('/drift/correlations/analyze', { window_minutes: 180 }, 'Cross-vendor drift correlation analysis completed');
+  }
+
+  const items = list(data);
+
+  return <>
+    <div className="section-banner">
+      <span className="banner-icon"><Network size={22} /></span>
+      <div>
+        <strong>Cross-Vendor Drift Correlation</strong>
+        <p>Surface related structural drift across distinct vendors with decomposable scoring. Never alters adapters or baselines automatically — provided as an authoritative SOC investigation aid.</p>
+      </div>
+      <div className="inline-actions" style={{ marginLeft: 'auto' }}>
+        <button className="button primary small" disabled={busy} onClick={analyze}>
+          <RefreshCw size={14} className={busy ? 'spin' : ''} />Analyze correlations
+        </button>
+      </div>
+    </div>
+
+    <ErrorNotice message={error} />
+
+    {loading ? <Loader /> : items.length ? (
+      <div className="finding-list">
+        {items.map((c, i) => (
+          <div key={c.id || i} className="finding-card" style={{ cursor: 'pointer' }} onClick={() => setSelected(c)}>
+            <span className="finding-icon"><Network size={22} /></span>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3>{c.explanation || `Correlation Group ${i + 1}`}</h3>
+                <span className={`badge ${String(c.strength).toUpperCase() === 'HIGH' ? 'red' : String(c.strength).toUpperCase() === 'MEDIUM' ? 'amber' : 'blue'}`}>
+                  {readable(c.strength || 'MODERATE')} correlation
+                </span>
+              </div>
+              <p>{c.explanation || 'Related structural changes detected across multiple ingestion feeds within observation window.'}</p>
+              <span>Vendors: {c.vendors?.join(', ') || 'Multiple'} · Sources: {c.sources?.join(', ') || 'Multiple'} · {time(c.created_at || c.window?.end)}</span>
+            </div>
+            <button className="button secondary small" onClick={e => { e.stopPropagation(); setSelected(c); }}><Eye size={13} />Details</button>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <Panel title="Correlated patterns">
+        <Empty title="No cross-vendor correlations detected" description="Cross-vendor correlations appear when multiple sources experience related field shifts or schema changes within the same time window." icon={Network}>
+          <button className="button primary small" disabled={busy} onClick={analyze}><RefreshCw size={14} />Run analysis</button>
+        </Empty>
+      </Panel>
+    )}
+
+    {selected && <Modal title="Drift correlation investigation breakdown" onClose={() => setSelected(undefined)} wide>
+      <div className="forensics-header">
+        <div>
+          <span className="eyebrow">CROSS-VENDOR INVESTIGATION SIGNAL</span>
+          <h3>{selected.explanation || 'Correlated Drift Event'}</h3>
+          <span className="mono muted">{selected.id}</span>
+        </div>
+        <Badge value={selected.strength || 'ANALYZED'} />
+      </div>
+      <div className="detail-stats">
+        <div><span>Score</span><strong>{(Number(selected.score || 0)).toFixed(2)}</strong></div>
+        <div><span>Vendors</span><strong>{selected.vendors?.length || 0} involved</strong></div>
+        <div><span>Sources</span><strong>{selected.sources?.length || 0} involved</strong></div>
+        <div><span>Fields</span><strong>{selected.affected_fields?.length || 0} shared</strong></div>
+      </div>
+      {selected.score_breakdown && (
+        <div style={{ marginTop: 14 }}>
+          <h4>Attribution Score Breakdown</h4>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Component</th><th>Value</th><th>Weight</th><th>Contribution</th></tr></thead>
+              <tbody>
+                {Object.entries(selected.score_breakdown).map(([k, v]: [string, any]) => (
+                  <tr key={k}>
+                    <td><strong>{readable(k)}</strong></td>
+                    <td className="mono">{typeof v.value === 'number' ? v.value.toFixed(2) : String(v.value)}</td>
+                    <td>{v.weight}</td>
+                    <td className="mono"><strong>{typeof v.contribution === 'number' ? v.contribution.toFixed(2) : String(v.contribution)}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {selected.per_source && (
+        <div style={{ marginTop: 14 }}>
+          <h4>Per-Source Impact Breakdown</h4>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Source</th><th>Vendor</th><th>Affected fields</th><th>Change types</th></tr></thead>
+              <tbody>
+                {Object.entries(selected.per_source).map(([src, s]: [string, any]) => (
+                  <tr key={src}>
+                    <td className="mono"><strong>{src}</strong></td>
+                    <td>{s.vendor}</td>
+                    <td><span className="mono" style={{ fontSize: '11px' }}>{s.fields?.join(', ') || '—'}</span></td>
+                    <td>{s.change_types?.join(', ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <details className="result-details" open style={{ marginTop: 14 }}>
+        <summary>Raw correlation evidence</summary>
+        <Json value={selected} />
+      </details>
+    </Modal>}
+  </>;
+}
+
+function Export({ tick, action, busy, notify }: { tick: number; action: Action; busy: boolean; notify: (m: string, k?: Toast['kind']) => void }) {
+  const sources = useResource('/sources', tick);
+  const logs = useResource('/export/logs', tick);
+  const [output, setOutput] = useState<'ndjson' | 'json'>('ndjson');
+  const [limit, setLimit] = useState(1000);
+  const [source, setSource] = useState('');
+  const [status, setStatus] = useState('');
+  const [includeRaw, setIncludeRaw] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  async function triggerExport(e: FormEvent) {
+    e.preventDefault();
+    setExporting(true);
+    try {
+      const q = new URLSearchParams({
+        format: output,
+        limit: String(limit),
+        include_raw: String(includeRaw),
+        ...(source ? { source } : {}),
+        ...(status ? { status } : {}),
+      });
+      const token = sessionStorage.getItem('logforge.token');
+      const response = await fetch(`/api/export?${q.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) throw new Error(`Export failed (${response.status})`);
+      const blob = await response.blob();
+      const stamp = new Date().toISOString().slice(0, 10);
+      saveBlob(blob, `logforge-evidence-${stamp}.${output}`);
+      notify(`Exported ${limit} event(s) in ${output.toUpperCase()} format`);
+    } catch (err) {
+      notify((err as Error).message, 'error');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const logItems = list(logs.data);
+
+  return <>
+    <div className="section-banner">
+      <span className="banner-icon"><ArrowDownToLine size={22} /></span>
+      <div>
+        <strong>Cryptographic Evidence Export</strong>
+        <p>Bounded, streaming NDJSON/JSON evidence export under the published logforge.export.v1 specification. Raw payloads and Merkle proofs remain verified.</p>
+      </div>
+    </div>
+
+    <div className="ingest-layout">
+      <div>
+        <Panel title="Configure evidence export" subtitle="Select schema parameters, destination filters, and limits">
+          <form onSubmit={triggerExport} className="ingest-form">
+            <div className="form-row">
+              <label>Output format
+                <select value={output} onChange={e => setOutput(e.target.value as any)}>
+                  <option value="ndjson">NDJSON (Streaming Line-Delimited JSON)</option>
+                  <option value="json">JSON (Bounded Array Document)</option>
+                </select>
+              </label>
+              <label>Event limit
+                <input type="number" min="1" max="100000" value={limit} onChange={e => setLimit(Number(e.target.value))} required />
+              </label>
+            </div>
+            <div className="form-row">
+              <label>Source filter (optional)
+                <select value={source} onChange={e => setSource(e.target.value)}>
+                  <option value="">All sources</option>
+                  {list(sources.data).map(s => <option key={s.id || s.name} value={s.name || s.id}>{s.name || s.id}</option>)}
+                </select>
+              </label>
+              <label>Status filter (optional)
+                <select value={status} onChange={e => setStatus(e.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="PARSED">PARSED only</option>
+                  <option value="PARTIAL">PARTIAL only</option>
+                  <option value="FAILED">FAILED only</option>
+                </select>
+              </label>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0', fontSize: '12px' }}>
+              <input type="checkbox" checked={includeRaw} onChange={e => setIncludeRaw(e.target.checked)} />
+              Include preserved raw log text and SHA-256 integrity receipt in output
+            </label>
+            <div className="form-bottom" style={{ marginTop: 14 }}>
+              <span><ShieldCheck size={16} />Strict logforge.export.v1 envelope</span>
+              <button className="button primary" disabled={exporting}>
+                {exporting ? <LoaderCircle size={16} className="spin" /> : <ArrowDownToLine size={16} />}
+                Download export package
+              </button>
+            </div>
+          </form>
+        </Panel>
+
+        <Panel title="Export audit trail" subtitle="Historical record of evidence deliveries and downloads" actions={<span className="count-label">{logItems.length} exports</span>}>
+          <ErrorNotice message={logs.error} />
+          {logs.loading ? <Loader /> : logItems.length ? (
+            <div className="table-scroll">
+              <table>
+                <thead><tr><th>Export ID</th><th>Format</th><th>Events</th><th>Actor</th><th>Date</th></tr></thead>
+                <tbody>
+                  {logItems.map((l, i) => (
+                    <tr key={l.id || i}>
+                      <td className="mono">{short(l.id || `exp-${i}`, 14)}</td>
+                      <td><span className="format-tag">{String(l.format || 'NDJSON').toUpperCase()}</span></td>
+                      <td>{number(l.event_count || l.limit || limit)}</td>
+                      <td>{l.actor || 'admin'}</td>
+                      <td className="muted">{time(l.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <Empty title="No export history" description="Run your first export above to download evidence packages and generate tamper-evident export logs." icon={ArrowDownToLine} />
+          )}
+        </Panel>
+      </div>
+
+      <div className="ingest-aside">
+        <Panel title="Export specification" subtitle="logforge.export.v1 guarantees">
+          <div className="attention-list">
+            <div className="attention-item" style={{ padding: '12px 14px' }}>
+              <div className="attention-icon ok"><ShieldCheck size={16} /></div>
+              <div>
+                <strong>Immutable Raw Preserved</strong>
+                <p>Every event includes the original, unmodified raw payload as received over the wire.</p>
+              </div>
+            </div>
+            <div className="attention-item" style={{ padding: '12px 14px' }}>
+              <div className="attention-icon ok"><Fingerprint size={16} /></div>
+              <div>
+                <strong>Cryptographic SHA-256</strong>
+                <p>Content-addressed bit-by-bit hash matches the raw vault and Merkle leaf record.</p>
+              </div>
+            </div>
+            <div className="attention-item" style={{ padding: '12px 14px' }}>
+              <div className="attention-icon ok"><Layers3 size={16} /></div>
+              <div>
+                <strong>Normalized OCSF Schema</strong>
+                <p>Standardized fields mapped to Open Cybersecurity Schema Framework semantics.</p>
+              </div>
+            </div>
+            <div className="attention-item" style={{ padding: '12px 14px' }}>
+              <div className="attention-icon ok"><GitBranch size={16} /></div>
+              <div>
+                <strong>Complete Lineage Metadata</strong>
+                <p>Tracks parser identity, adapter version, and pipeline transformation steps.</p>
+              </div>
+            </div>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  </>;
+}

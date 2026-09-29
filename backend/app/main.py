@@ -147,6 +147,10 @@ app.include_router(events.router, prefix="/api", dependencies=GOVERNED)
 app.include_router(auth.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(demo.router, prefix="/api", dependencies=GOVERNED)
+app.include_router(onboarding.router, prefix="/api", dependencies=GOVERNED)
+app.include_router(phase8.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
+app.include_router(confidence.router, prefix="/api")
 
 
 
