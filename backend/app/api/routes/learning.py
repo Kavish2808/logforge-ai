@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.repository import learning_repo
+from app.governance.deps import acting_as, current_actor
 from app.schema.learning import (
     ActivateRequest,
     ApproveRequest,
@@ -20,6 +21,7 @@ from app.schema.learning import (
     SubmitDeltaRequest,
 )
 from app.services import learning_service as svc
+from app.services.auth_service import Actor
 
 router = APIRouter(tags=["learning"])
 T = TypeVar("T")
@@ -76,28 +78,33 @@ def submit_proposal(session_id: str, request: SubmitDeltaRequest, db: Session = 
 
 
 @router.post("/learning/sessions/{session_id}/approve", response_model=LearningSessionResponse)
-def approve(session_id: str, request: ApproveRequest, db: Session = Depends(get_db)) -> LearningSessionResponse:
+def approve(session_id: str, request: ApproveRequest, db: Session = Depends(get_db),
+            actor: Actor = Depends(current_actor)) -> LearningSessionResponse:
     return _response(db, _call(lambda: svc.approve(
-        db, session_id, proposal_version=request.proposal_version, approved_by=request.approved_by,
+        db, session_id, proposal_version=request.proposal_version, approved_by=acting_as(request.approved_by, actor),
         note=request.note, confirm_supersede=request.confirm_supersede, activate_now=request.activate,
     )))
 
 
 @router.post("/learning/sessions/{session_id}/request-review", response_model=LearningSessionResponse)
-def request_review(session_id: str, request: ReasonRequest, db: Session = Depends(get_db)) -> LearningSessionResponse:
-    return _response(db, _call(lambda: svc.request_review(db, session_id, reason=request.reason, requested_by=request.by)))
+def request_review(session_id: str, request: ReasonRequest, db: Session = Depends(get_db),
+                   actor: Actor = Depends(current_actor)) -> LearningSessionResponse:
+    return _response(db, _call(lambda: svc.request_review(db, session_id, reason=request.reason, requested_by=acting_as(request.by, actor))))
 
 
 @router.post("/learning/sessions/{session_id}/reject", response_model=LearningSessionResponse)
-def reject(session_id: str, request: ReasonRequest, db: Session = Depends(get_db)) -> LearningSessionResponse:
-    return _response(db, _call(lambda: svc.reject(db, session_id, reason=request.reason, rejected_by=request.by)))
+def reject(session_id: str, request: ReasonRequest, db: Session = Depends(get_db),
+           actor: Actor = Depends(current_actor)) -> LearningSessionResponse:
+    return _response(db, _call(lambda: svc.reject(db, session_id, reason=request.reason, rejected_by=acting_as(request.by, actor))))
 
 
 @router.post("/learning/sessions/{session_id}/activate", response_model=LearningSessionResponse)
-def activate(session_id: str, request: ActivateRequest, db: Session = Depends(get_db)) -> LearningSessionResponse:
-    return _response(db, _call(lambda: svc.activate(db, session_id, activated_by=request.activated_by)))
+def activate(session_id: str, request: ActivateRequest, db: Session = Depends(get_db),
+             actor: Actor = Depends(current_actor)) -> LearningSessionResponse:
+    return _response(db, _call(lambda: svc.activate(db, session_id, activated_by=acting_as(request.activated_by, actor))))
 
 
 @router.post("/learning/sessions/{session_id}/rollback", response_model=LearningSessionResponse)
-def rollback(session_id: str, request: RollbackRequest, db: Session = Depends(get_db)) -> LearningSessionResponse:
-    return _response(db, _call(lambda: svc.rollback(db, session_id, reason=request.reason, requested_by=request.requested_by)))
+def rollback(session_id: str, request: RollbackRequest, db: Session = Depends(get_db),
+             actor: Actor = Depends(current_actor)) -> LearningSessionResponse:
+    return _response(db, _call(lambda: svc.rollback(db, session_id, reason=request.reason, requested_by=acting_as(request.requested_by, actor))))

@@ -132,6 +132,8 @@ class DriftMetadata(BaseModel):
     severity_score: int | None = None
     severity_factors: dict[str, int] | None = None
     critical_field_changes: list[DriftCriticalFieldChange] = Field(default_factory=list)
+    # Critical values that no longer fit their typed target (app.pipeline.drift.value_shape).
+    value_shape_changes: list[dict[str, Any]] = Field(default_factory=list)
     recommended_actions: list[str] = Field(default_factory=list)  # REVIEW_* codes
     current_adapter: str | None = None  # POSSIBLE_FORMAT_DRIFT: the generic adapter used
     evidence: list[DriftEvidence] = Field(default_factory=list)  # POSSIBLE_FORMAT_DRIFT

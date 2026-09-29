@@ -1,5 +1,14 @@
 # Validation and measured performance
 
+> **Accuracy notice (defect remediation, 2026-09-29).** Parts of this document describe capabilities the
+> application in this repository does not have. Verified against the code: the backend supports **PostgreSQL
+> only** (no SQLite); there is **no evidence-signing key or keyed batch signature** (Merkle anchors are unsigned
+> local append-only files); ingestion has **no idempotency key, deduplication or `raw_base64`**; there is **no
+> drain/readiness endpoint** (only `GET /health`); outbound webhook evidence delivery is **not implemented**; and
+> the integrity check is `GET /api/v1/integrity/verify` (all routes are under `/api/v1`). Statements below that
+> depend on those features are not valid for this codebase. Authoritative references: README.md,
+> [API.md](API.md), [ARCHITECTURE.md](ARCHITECTURE.md), [CAPABILITIES.md](CAPABILITIES.md).
+
 ## What counts as evidence
 
 Run results are tied to a code revision, runtime, database, workload, and host. Source code, a benchmark tool, and a CI workflow are deliverables; they are not substitutes for a successful run. The delivered environment provides native Python/Node and local SQLite. PostgreSQL and native NGINX deployment validation require those services to be installed separately.
