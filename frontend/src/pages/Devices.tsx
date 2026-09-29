@@ -136,11 +136,29 @@ export function DevicesPage() {
   const scaleMetrics = useApi((s) => getScaleMetrics(s), [metricsTick]);
   const lbTopology = useApi((s) => getLoadBalancerTopology(s), [metricsTick]);
 
+  const [liveStreaming, setLiveStreaming] = useState(false);
+
   useEffect(() => {
     if (activeTab !== "scale") return;
     const interval = setInterval(() => setMetricsTick((t) => t + 1), 3000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!liveStreaming) return;
+    const interval = setInterval(async () => {
+      try {
+        await dumpFleetLogs();
+        devices.reload();
+        scaleMetrics.reload();
+        lbTopology.reload();
+        setMetricsTick((t) => t + 1);
+      } catch (err) {
+        // ignore tick errors
+      }
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [liveStreaming]);
 
   const [filterText, setFilterText] = useState("");
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
@@ -375,6 +393,21 @@ export function DevicesPage() {
           <div className="row" style={{ gap: 10 }}>
             <button
               type="button"
+              className={`button ${liveStreaming ? "primary" : ""}`}
+              onClick={() => setLiveStreaming(!liveStreaming)}
+              title={liveStreaming ? "Pause continuous live streaming feed" : "Start continuous live streaming feed (1.5s interval)"}
+              style={{
+                borderColor: liveStreaming ? "var(--ok, #10b981)" : undefined,
+                background: liveStreaming ? "rgba(16, 185, 129, 0.15)" : undefined,
+                color: liveStreaming ? "var(--ok, #10b981)" : undefined,
+                fontWeight: 600,
+              }}
+            >
+              <Radio size={14} className={liveStreaming ? "spin" : ""} style={{ color: liveStreaming ? "var(--ok, #10b981)" : undefined }} />
+              {liveStreaming ? "Live Feed: ON" : "Live Feed"}
+            </button>
+            <button
+              type="button"
               className="button"
               onClick={handleFleetDump}
               disabled={fleetStreaming}
@@ -389,6 +422,8 @@ export function DevicesPage() {
               className="button"
               onClick={() => {
                 devices.reload();
+                scaleMetrics.reload();
+                lbTopology.reload();
                 setMetricsTick((t) => t + 1);
               }}
               title="Refresh device registry and scaling metrics"

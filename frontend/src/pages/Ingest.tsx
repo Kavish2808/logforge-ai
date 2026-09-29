@@ -71,6 +71,7 @@ export function IngestPage() {
   const [result, setResult] = useState<any>();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [progressText, setProgressText] = useState<string | null>(null);
+  const [progressPct, setProgressPct] = useState<number | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   function updateRaw(v: string) {
@@ -84,30 +85,41 @@ export function IngestPage() {
     setError("");
     setBusy(true);
     try {
-      if (selectedFile && selectedFile.size > 2 * 1024 * 1024) {
+      let allEvents: { raw: string }[] = [];
+      if (selectedFile) {
         setProgressText(`Reading ${selectedFile.name} (${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)…`);
+        setProgressPct(0);
         const text = await selectedFile.text();
-        const allLines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("# --- Previewing"));
-        if (!allLines.length) throw new Error("No valid log lines found in selected file.");
+        const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("# --- Previewing"));
+        if (!lines.length) throw new Error("No valid log lines found in selected file.");
+        allEvents = lines.map((l) => ({ raw: l }));
+      } else {
+        allEvents = parseInput(raw, mode);
+      }
 
-        const chunkSize = 2000;
+      if (!allEvents.length) throw new Error("Add at least one event to ingest.");
+
+      // Stream any batch with > 50 events in micro-batches to give live progress and avoid payload limits
+      if (allEvents.length > 50) {
+        const chunkSize = 1000;
         let totalAccepted = 0;
         let sCount = 0;
         let pCount = 0;
         let fCount = 0;
         let sampleResults: any[] = [];
 
-        for (let i = 0; i < allLines.length; i += chunkSize) {
-          const chunk = allLines.slice(i, i + chunkSize);
-          const pct = Math.round((i / allLines.length) * 100);
-          setProgressText(`Streaming: ${i.toLocaleString()} / ${allLines.length.toLocaleString()} logs (${pct}%)…`);
+        for (let i = 0; i < allEvents.length; i += chunkSize) {
+          const chunk = allEvents.slice(i, i + chunkSize);
+          const pct = Math.round((i / allEvents.length) * 100);
+          setProgressPct(pct);
+          setProgressText(`Streaming: ${i.toLocaleString()} / ${allEvents.length.toLocaleString()} logs (${pct}%)…`);
 
           const res = await fetch("/api/v1/ingest", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               source: source || "default",
-              events: chunk.map((r) => ({ raw: r })),
+              events: chunk,
               idempotency_key: crypto.randomUUID(),
             }),
           });
@@ -122,11 +134,12 @@ export function IngestPage() {
           }
         }
 
+        setProgressPct(100);
         setProgressText(null);
         setResult({
           accepted: totalAccepted,
           duplicates: 0,
-          total: allLines.length,
+          total: allEvents.length,
           success_count: sCount,
           partial_count: pCount,
           failed_count: fCount,
@@ -135,12 +148,11 @@ export function IngestPage() {
         return;
       }
 
-      const events = parseInput(raw, mode);
-      if (!events.length) throw new Error("Add at least one event to ingest.");
+      // Single small payload (<= 50 events)
       const res = await fetch("/api/v1/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: source || "default", events, idempotency_key: crypto.randomUUID() }),
+        body: JSON.stringify({ source: source || "default", events: allEvents, idempotency_key: crypto.randomUUID() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -168,6 +180,7 @@ export function IngestPage() {
     } finally {
       setBusy(false);
       setProgressText(null);
+      setProgressPct(null);
     }
   }
 
@@ -313,6 +326,18 @@ export function IngestPage() {
               </div>
             )}
 
+            {progressText && (
+              <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: 8 }}>
+                <div className="row spread small" style={{ marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600, color: "var(--ok)" }}>{progressText}</span>
+                  {progressPct !== null && <span className="mono" style={{ fontWeight: 700 }}>{progressPct}%</span>}
+                </div>
+                <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${progressPct ?? 100}%`, height: "100%", background: "linear-gradient(90deg, #10b981, #6366f1)", transition: "width 0.15s ease" }} />
+                </div>
+              </div>
+            )}
+
             <div className="form-bottom">
               <span>
                 <Fingerprint size={16} />
@@ -320,7 +345,7 @@ export function IngestPage() {
               </span>
               <button className="button primary" disabled={busy}>
                 {busy ? <LoaderCircle size={16} className="spin" /> : <Zap size={16} />}
-                {progressText || "Run pipeline"}
+                {progressText ? "Streaming…" : "Run pipeline"}
               </button>
             </div>
           </form>
