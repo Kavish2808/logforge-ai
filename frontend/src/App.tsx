@@ -17,6 +17,7 @@ import {
   LogOut,
   LucideIcon,
   Menu,
+  Moon,
   Play,
   Radio,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
   Server,
   ShieldCheck,
   Sparkles,
+  Sun,
   Upload,
   UserRound,
   Workflow,
@@ -34,6 +36,7 @@ import {
 import { getAlertCounts, getHealth, getSummary, logout } from "./api/endpoints";
 import { Quiet } from "./components/trust";
 import { clearAuth, useAuth } from "./lib/auth";
+import { useTheme } from "./lib/theme";
 import { useApi } from "./lib/useApi";
 import { href, navigate, useRoute } from "./lib/router";
 import { requestSearch, ULID } from "./lib/search";
@@ -239,6 +242,7 @@ function UserMenu() {
 export default function App() {
   const route = useRoute();
   const { user } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [navOpen, setNavOpen] = useState(false);
 
   // First visit with no route and no session: land on the sign-in page (anonymous use stays possible in permissive mode).
@@ -321,7 +325,10 @@ export default function App() {
       <nav className="nav" aria-label="Primary" id="primary-nav">
         <div className="nav-brand-wrap">
           <a className="brand" href={href("overview")} aria-label="LogForge Console" onClick={() => setNavOpen(false)}>
-            <div className="brand-mark" aria-hidden="true"><Layers3 size={16} strokeWidth={2.4} /></div>
+            <svg width="28" height="28" viewBox="0 0 40 40" aria-hidden="true" style={{ borderRadius: 7, flexShrink: 0, boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }}>
+              <rect width="40" height="40" rx="11" fill="#ffffff" />
+              <path d="M10 10h9v5h-4v10h10v-4h5v9H10zm12 0h8v8h-5v-3h-3z" fill="#090b10" />
+            </svg>
             <div>
               <div className="brand-name">LOGFORGE</div>
               <div className="brand-sub">Platform Console</div>
@@ -410,6 +417,15 @@ export default function App() {
             <button className="icon-button" title="Refresh view" aria-label="Refresh view" type="button"
               onClick={() => window.dispatchEvent(new Event("hashchange"))}>
               <RefreshCw size={15} />
+            </button>
+            <button
+              className="icon-button"
+              title={theme === "dark" ? "Switch to white background" : "Switch to dark background"}
+              aria-label="Toggle background theme"
+              type="button"
+              onClick={toggleTheme}
+            >
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
             </button>
             <AlertBell />
             <UserMenu />
