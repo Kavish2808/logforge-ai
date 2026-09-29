@@ -69,6 +69,8 @@ export function IngestPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [progressText, setProgressText] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   function updateRaw(v: string) {
@@ -82,6 +84,57 @@ export function IngestPage() {
     setError("");
     setBusy(true);
     try {
+      if (selectedFile && selectedFile.size > 2 * 1024 * 1024) {
+        setProgressText(`Reading ${selectedFile.name} (${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)…`);
+        const text = await selectedFile.text();
+        const allLines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("# --- Previewing"));
+        if (!allLines.length) throw new Error("No valid log lines found in selected file.");
+
+        const chunkSize = 2000;
+        let totalAccepted = 0;
+        let sCount = 0;
+        let pCount = 0;
+        let fCount = 0;
+        let sampleResults: any[] = [];
+
+        for (let i = 0; i < allLines.length; i += chunkSize) {
+          const chunk = allLines.slice(i, i + chunkSize);
+          const pct = Math.round((i / allLines.length) * 100);
+          setProgressText(`Streaming: ${i.toLocaleString()} / ${allLines.length.toLocaleString()} logs (${pct}%)…`);
+
+          const res = await fetch("/api/v1/ingest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              source: source || "default",
+              events: chunk.map((r) => ({ raw: r })),
+              idempotency_key: crypto.randomUUID(),
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.message || data.error?.message || `Chunk failed at log ${i}`);
+          totalAccepted += data.accepted || chunk.length;
+          sCount += data.success_count || 0;
+          pCount += data.partial_count || 0;
+          fCount += data.failed_count || 0;
+          if (sampleResults.length < 10 && data.results) {
+            sampleResults.push(...data.results);
+          }
+        }
+
+        setProgressText(null);
+        setResult({
+          accepted: totalAccepted,
+          duplicates: 0,
+          total: allLines.length,
+          success_count: sCount,
+          partial_count: pCount,
+          failed_count: fCount,
+          results: sampleResults,
+        });
+        return;
+      }
+
       const events = parseInput(raw, mode);
       if (!events.length) throw new Error("Add at least one event to ingest.");
       const res = await fetch("/api/v1/ingest", {
@@ -114,6 +167,7 @@ export function IngestPage() {
       setError(err.message || String(err));
     } finally {
       setBusy(false);
+      setProgressText(null);
     }
   }
 
@@ -196,18 +250,31 @@ export function IngestPage() {
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (f) {
-                    if (f.size > 8 * 1024 * 1024) {
-                      setError("Select a file smaller than 8 MB.");
+                    if (f.size > 250 * 1024 * 1024) {
+                      setError("Select a file smaller than 250 MB.");
                       return;
                     }
-                    const text = await f.text();
-                    updateRaw(text);
-                    if (f.name.toLowerCase().endsWith(".csv") || text.split("\n")[0]?.includes(",")) {
-                      setMode("CSV / Tabular rows");
-                    } else if (text.trim().startsWith("[") && text.trim().endsWith("]")) {
-                      setMode("JSON array");
-                    } else if (text.includes("\n")) {
-                      setMode("One event per line");
+                    setSelectedFile(f);
+                    if (f.size <= 2 * 1024 * 1024) {
+                      const text = await f.text();
+                      updateRaw(text);
+                      if (f.name.toLowerCase().endsWith(".csv") || text.split("\n")[0]?.includes(",")) {
+                        setMode("CSV / Tabular rows");
+                      } else if (text.trim().startsWith("[") && text.trim().endsWith("]")) {
+                        setMode("JSON array");
+                      } else if (text.includes("\n")) {
+                        setMode("One event per line");
+                      }
+                    } else {
+                      const slice = f.slice(0, 128 * 1024);
+                      const text = await slice.text();
+                      const lines = text.split("\n").slice(0, 50).join("\n");
+                      updateRaw(`${lines}\n\n# --- Previewing first 50 lines of ${f.name} (${(f.size / (1024 * 1024)).toFixed(1)} MB). Full file will be streamed during ingest. ---`);
+                      if (f.name.toLowerCase().endsWith(".csv")) {
+                        setMode("CSV / Tabular rows");
+                      } else {
+                        setMode("One event per line");
+                      }
                     }
                   }
                   e.target.value = "";
@@ -233,6 +300,13 @@ export function IngestPage() {
               <span>UTF-8 input</span>
             </div>
 
+            {selectedFile && (
+              <div className="small faint" style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Selected file: <strong>{selectedFile.name}</strong> ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                <button type="button" className="text-button small" onClick={() => { setSelectedFile(null); updateRaw(""); }} style={{ padding: 0 }}>Remove file</button>
+              </div>
+            )}
+
             {error && (
               <div className="error-notice" role="alert" style={{ marginTop: 12 }}>
                 <span>{error}</span>
@@ -246,7 +320,7 @@ export function IngestPage() {
               </span>
               <button className="button primary" disabled={busy}>
                 {busy ? <LoaderCircle size={16} className="spin" /> : <Zap size={16} />}
-                Run pipeline
+                {progressText || "Run pipeline"}
               </button>
             </div>
           </form>
