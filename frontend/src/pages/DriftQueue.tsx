@@ -173,9 +173,9 @@ export function DriftQueue() {
     <>
       <div className="page-head">
         <div>
-<div className="eyebrow">Adapt · structural drift</div>
+          <div className="eyebrow">Drift Detection</div>
           <h1>Drift Queue</h1>
-          <p>Structural changes of known sources, detected deterministically by Phase 5 and resolved only by a human.</p>
+          <p>Deterministic schema changes awaiting operator review and confirmation.</p>
         </div>
       </div>
       <Pipeline steps={["Detected", "Review", "Human decision", "Accepted / acknowledged", "Optional: learning proposal"]} current={2} />

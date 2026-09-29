@@ -8,12 +8,12 @@ import { errorMessage, useApi } from "../lib/useApi";
 import { useTheme } from "../lib/theme";
 
 const FLOW = [
-  { icon: Radar, name: "Detect", text: "Format & vendor fingerprinting" },
+  { icon: Radar, name: "Detect", text: "Format identification" },
   { icon: Braces, name: "Parse", text: "Syslog · JSON · CEF · LEEF · XML" },
-  { icon: Layers, name: "Normalize", text: "OCSF-aligned universal schema" },
-  { icon: Database, name: "Preserve", text: "Raw bytes kept, hot & cold" },
-  { icon: Fingerprint, name: "Verify", text: "SHA-256 + Merkle evidence chain" },
-  { icon: Brain, name: "Learn", text: "Drift-driven, human-approved" },
+  { icon: Layers, name: "Normalize", text: "OCSF schema alignment" },
+  { icon: Database, name: "Preserve", text: "Immutable raw byte vault" },
+  { icon: Fingerprint, name: "Verify", text: "SHA-256 Merkle proofs" },
+  { icon: Brain, name: "Learn", text: "Human-in-the-loop drift" },
 ];
 
 export function LoginPage({ onEnter }: { onEnter: () => void }) {
@@ -68,9 +68,9 @@ export function LoginPage({ onEnter }: { onEnter: () => void }) {
           </div>
         </div>
         <div className="login-hero">
-          <div className="eyebrow">Security evidence platform</div>
-          <h1>From raw logs to <span>trusted, adaptive evidence.</span></h1>
-          <p>Any log is detected, parsed and normalized, its raw bytes preserved and cryptographically verified, and its parsers adapt to change under evidence and human approval.</p>
+          <div className="eyebrow">Security Evidence</div>
+          <h1>Raw logs to <span>verifiable evidence.</span></h1>
+          <p>Deterministic parsing, OCSF normalization, cryptographic WORM vaulting, and drift governance.</p>
         </div>
         <ol className="login-flow" aria-label="Pipeline">
           {FLOW.map(({ icon: Icon, name, text }) => (
@@ -78,9 +78,9 @@ export function LoginPage({ onEnter }: { onEnter: () => void }) {
           ))}
         </ol>
         <div className="login-foot">
-          <span><Lock size={12} /> Tokens stored as SHA-256 hashes</span>
-          <span><ShieldCheck size={12} /> Hash-chained audit of every decision</span>
-          <span><KeyRound size={12} /> Local accounts · PBKDF2</span>
+          <span><Lock size={12} /> SHA-256 tokens</span>
+          <span><ShieldCheck size={12} /> Hash-chained audit</span>
+          <span><KeyRound size={12} /> Local PBKDF2</span>
         </div>
       </section>
 
@@ -94,13 +94,13 @@ export function LoginPage({ onEnter }: { onEnter: () => void }) {
             </>
           ) : (
             <>
-              <h2>{bootstrap ? "Create the first SOC_ADMIN" : "Sign in"}</h2>
+              <h2>{bootstrap ? "Initialize SOC_ADMIN" : "Sign in"}</h2>
               <p className="sub">
-                {status.loading && !status.data ? "Checking authentication status…"
-                  : bootstrap ? "No account exists yet. The first account becomes SOC_ADMIN; the server refuses this once any user exists."
-                  : "Use your LogForge account. Roles are assigned by a SOC_ADMIN."}
+                {status.loading && !status.data ? "Checking auth…"
+                  : bootstrap ? "First account initializes SOC_ADMIN."
+                  : "Enter your LogForge credentials."}
               </p>
-              {status.error && <div className="notice fail" role="alert" style={{ marginBottom: 14 }}>Authentication service unavailable: {status.error}</div>}
+              {status.error && <div className="notice fail" role="alert" style={{ marginBottom: 14 }}>Auth service unavailable: {status.error}</div>}
               <form onSubmit={submit}>
                 <label>Username
                   <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required autoFocus />
@@ -117,10 +117,10 @@ export function LoginPage({ onEnter }: { onEnter: () => void }) {
               </form>
               {status.data && (
                 <div className="mode-note">
-                  RBAC mode <strong>{status.data.rbac_mode}</strong>
+                  RBAC: <strong>{status.data.rbac_mode}</strong>
                   {status.data.rbac_mode === "enforce"
-                    ? " — governed actions, ingestion and export require a signed-in role."
-                    : " — development / demo: anonymous use is allowed and audited as anonymous."}
+                    ? " — Authentication enforced."
+                    : " — Permissive mode active."}
                   {status.data.rbac_mode !== "enforce" && (
                     <>
                       <div className="divider">or</div>

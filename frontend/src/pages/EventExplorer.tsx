@@ -39,9 +39,9 @@ export function EventExplorer() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">LOG REPOSITORY</div>
+          <div className="eyebrow">Log Repository</div>
           <h1>Event Explorer</h1>
-          <p>Search, filter, and inspect normalized events with complete raw lineage.</p>
+          <p>Filter and inspect normalized events with cryptographic raw lineage.</p>
         </div>
       </div>
       <Card>

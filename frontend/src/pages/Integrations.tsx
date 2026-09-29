@@ -62,7 +62,6 @@ function Registry() {
             <input aria-label="Destination URL" placeholder="https://siem.example.com/ingest" value={url} onChange={(e) => setUrl(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
             <button type="submit" disabled={!name.trim() || !url.trim()}><Send size={14} /> Register</button>
           </form>
-          <p className="small faint" style={{ marginTop: 8 }}>The server validates destinations (SSRF controls: no private, loopback or metadata addresses) and audits every registration.</p>
           {msg && <div className={`notice ${msg.kind}`} role="status" style={{ marginTop: 8 }}>{msg.text}</div>}
         </>
       )}
@@ -76,24 +75,18 @@ function Channels() {
     <Card title="Alert delivery channels" actions={<Link to="alerts">Alerts →</Link>}>
       <Load state={channels}>
         {(c) => (
-          <>
-            <div className="health-list">
-              {c.channels.map((ch) => (
-                <div className="health-item" key={ch.channel}>
-                  <span className="hi-icon" style={{ background: ch.configured ? "var(--ok-bg)" : "var(--neutral-bg)", color: ch.configured ? "var(--ok)" : "var(--neutral)" }}>
-                    {ch.configured ? <CheckCircle2 size={15} /> : <CircleDashed size={15} />}
-                  </span>
-                  <div><strong style={{ textTransform: "capitalize" }}>{ch.channel}</strong>
-                    <div className="hi-meta">{ch.channel === "internal" ? "always on — stored alert bus" : ch.configured ? "configured on the server" : "not configured"}</div></div>
-                  {ch.configured ? <span className="badge b-ok">configured</span> : <span className="badge b-neutral">not configured</span>}
-                </div>
-              ))}
-            </div>
-            <p className="small muted" style={{ marginTop: 12 }}>
-              "Configured" means a destination is set in the server environment; destinations are never displayed. Each alert records
-              every delivery attempt and its real outcome on the Alerts page — a configured channel is not proof of delivery.
-            </p>
-          </>
+          <div className="health-list">
+            {c.channels.map((ch) => (
+              <div className="health-item" key={ch.channel}>
+                <span className="hi-icon" style={{ background: ch.configured ? "var(--ok-bg)" : "var(--neutral-bg)", color: ch.configured ? "var(--ok)" : "var(--neutral)" }}>
+                  {ch.configured ? <CheckCircle2 size={15} /> : <CircleDashed size={15} />}
+                </span>
+                <div><strong style={{ textTransform: "capitalize" }}>{ch.channel}</strong>
+                  <div className="hi-meta">{ch.channel === "internal" ? "Internal alert bus" : ch.configured ? "Configured on server" : "Not configured"}</div></div>
+                {ch.configured ? <span className="badge b-ok">configured</span> : <span className="badge b-neutral">not configured</span>}
+              </div>
+            ))}
+          </div>
         )}
       </Load>
     </Card>
@@ -105,9 +98,9 @@ export function IntegrationsPage() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Integrate</div>
+          <div className="eyebrow">Integrations</div>
           <h1>Integrations</h1>
-          <p>Where evidence and alerts can go — shown exactly as the backend reports them, including what is not implemented.</p>
+          <p>Outbound SIEM endpoints and alert notification channels.</p>
         </div>
       </div>
       <div className="grid g-main">

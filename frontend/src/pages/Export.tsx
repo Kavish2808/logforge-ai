@@ -72,9 +72,9 @@ export function ExportPage() {
     <>
       <div className="page-head">
         <div>
-<div className="eyebrow">Integrate · evidence export</div>
+          <div className="eyebrow">Data Egress</div>
           <h1>Export</h1>
-          <p>Stream selected events to downstream SIEM, data-lake or ML systems as versioned, integrity-carrying records.</p>
+          <p>Export normalized logs and cryptographic receipts for SIEM and lake ingestion.</p>
         </div>
       </div>
       <Card title="Selection">
@@ -103,15 +103,13 @@ export function ExportPage() {
         </Card>
         <Card title="Export">
           <Load state={count}>
-            {(d) => <Stat label="Matching events" value={d.total === null ? "—" : num(d.total)} hint="counted by the read-only views API" />}
+            {(d) => <Stat label="Matching events" value={d.total === null ? "—" : num(d.total)} hint="counted by views API" />}
           </Load>
           <div className="row" style={{ marginTop: 12 }}>
             <button className="primary" disabled={busy} onClick={() => run(null)}>{busy ? "Exporting…" : "Download"}</button>
             {cursor && <button disabled={busy} onClick={() => run(cursor)}>Download next page</button>}
           </div>
           {msg && <div className={`notice ${msg.kind}`} role="status" style={{ marginTop: 10 }}>{msg.text}</div>}
-          <p className="small muted">Each record carries full extensions (inline + overflow), field accounting, the raw SHA-256 and vault reference,
-            and its Merkle batch once sealed. Exports are streamed in bounded batches and recorded in the audit log.</p>
         </Card>
       </div>
       <Card title="Recent exports">

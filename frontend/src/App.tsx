@@ -72,13 +72,13 @@ interface NavItem {
 
 // Core day-to-day operations for an operator / analyst
 const PRIMARY_NAV: NavItem[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard, description: "System health & metrics" },
+  { id: "overview", label: "Overview", icon: LayoutDashboard, description: "Health & telemetry" },
   { id: "events", label: "Events", icon: Layers3, description: "Normalized logs & lineage" },
-  { id: "ingest", label: "Ingest", icon: Upload, description: "Submit raw logs" },
-  { id: "devices", label: "Devices", icon: Server, description: "Syslog feeds & collectors" },
-  { id: "drift", label: "Drift", icon: Activity, description: "Schema changes awaiting review" },
-  { id: "alerts", label: "Alerts", icon: Bell, description: "System & security alerts" },
-  { id: "export", label: "Export", icon: ArrowDownToLine, description: "Log data egress & SIEM" },
+  { id: "ingest", label: "Ingest", icon: Upload, description: "Ingest raw logs" },
+  { id: "devices", label: "Devices", icon: Server, description: "Feeds & listeners" },
+  { id: "drift", label: "Drift", icon: Activity, description: "Drift review" },
+  { id: "alerts", label: "Alerts", icon: Bell, description: "Security alerts" },
+  { id: "export", label: "Export", icon: ArrowDownToLine, description: "Log export" },
 ];
 
 // Deep analysis, compliance, and administration tools
@@ -86,29 +86,29 @@ const ADVANCED_NAV: { group: string; items: NavItem[] }[] = [
   {
     group: "Adapters",
     items: [
-      { id: "sources", label: "Sources", icon: Database, description: "Log sources & active parsers" },
-      { id: "onboarding", label: "Onboarding", icon: Wand2, description: "Generate new adapters" },
-      { id: "evolution", label: "Evolution", icon: GitBranch, description: "Version history & diffs" },
+      { id: "sources", label: "Sources", icon: Database, description: "Sources & parsers" },
+      { id: "onboarding", label: "Onboarding", icon: Wand2, description: "Adapter generation" },
+      { id: "evolution", label: "Evolution", icon: GitBranch, description: "Version history" },
       { id: "learning", label: "Learning", icon: Sparkles, description: "Adapter proposals" },
-      { id: "advanced-drift", label: "Drift Analysis", icon: Workflow, description: "Statistical change detection" },
-      { id: "baselines", label: "Baselines", icon: ShieldCheck, description: "Golden schema baselines" },
+      { id: "advanced-drift", label: "Drift Analysis", icon: Workflow, description: "Statistical drift" },
+      { id: "baselines", label: "Baselines", icon: ShieldCheck, description: "Golden baselines" },
     ],
   },
   {
     group: "Forensics",
     items: [
-      { id: "correlations", label: "Correlations", icon: Radio, description: "Multi-source incident correlation" },
-      { id: "replay", label: "Replay", icon: RotateCcw, description: "Historical re-processing" },
+      { id: "correlations", label: "Correlations", icon: Radio, description: "Multi-source correlation" },
+      { id: "replay", label: "Replay", icon: RotateCcw, description: "Forensic replay" },
     ],
   },
   {
     group: "Governance",
     items: [
-      { id: "integrity", label: "Integrity", icon: Fingerprint, description: "WORM vault & Merkle proofs" },
-      { id: "audit", label: "Audit", icon: FileText, description: "Cryptographic audit trail" },
-      { id: "governance", label: "Access & RBAC", icon: ShieldCheck, description: "Roles & maker-checker rules" },
-      { id: "integrations", label: "Integrations", icon: Cable, description: "Alert & SIEM webhooks" },
-      { id: "demo", label: "Demo Mode", icon: Play, description: "Automated end-to-end flow" },
+      { id: "integrity", label: "Integrity", icon: Fingerprint, description: "WORM vault & Merkle" },
+      { id: "audit", label: "Audit", icon: FileText, description: "Audit trail" },
+      { id: "governance", label: "Access & RBAC", icon: ShieldCheck, description: "RBAC & policies" },
+      { id: "integrations", label: "Integrations", icon: Cable, description: "Webhooks & SIEM" },
+      { id: "demo", label: "Demo Mode", icon: Play, description: "Automated pipeline" },
     ],
   },
 ];

@@ -357,15 +357,13 @@ export function DevicesPage() {
           <div>
             <div className="section-eyebrow" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Network size={14} className="accent-color" />
-              <span>DIRECT INBOUND TELEMETRY &amp; MULTI-DEVICE MANAGEMENT</span>
+              <span>INBOUND TELEMETRY &amp; DEVICE MANAGEMENT</span>
             </div>
             <h1 style={{ fontSize: "1.75rem", margin: "4px 0 6px 0", fontWeight: 700 }}>
-              Connected Devices &amp; Direct Log Ingestion
+              Connected Devices
             </h1>
             <p className="faint" style={{ maxWidth: 740, margin: 0, fontSize: "0.95rem" }}>
-              Connect edge firewalls, servers, Kubernetes sidecars, and cloud accounts to dump logs directly into
-              LogForge AI. Manage credentials, generate copyable configs, stream live multi-device traffic, and scale up
-              to <strong>1,000,000+ logs</strong> with zero loss.
+              Configure syslog listeners, collector credentials, load-balanced replicas, and live streaming feeds.
             </p>
           </div>
           <div className="row" style={{ gap: 10 }}>
@@ -374,11 +372,11 @@ export function DevicesPage() {
               className="button"
               onClick={handleFleetDump}
               disabled={fleetStreaming}
-              title="Stream simultaneous live log bursts from ALL registered devices"
+              title="Stream simultaneous live log bursts from all registered devices"
               style={{ background: "rgba(16, 185, 129, 0.1)", borderColor: "rgba(16, 185, 129, 0.3)", color: "var(--ok, #10b981)" }}
             >
               <Zap size={14} />
-              {fleetStreaming ? "Streaming Fleet…" : "Stream All Devices (Fleet Dump)"}
+              {fleetStreaming ? "Streaming…" : "Stream Fleet"}
             </button>
             <button
               type="button"
@@ -397,7 +395,7 @@ export function DevicesPage() {
               onClick={() => setModalOpen(true)}
               style={{ fontWeight: 600 }}
             >
-              <Plus size={15} /> Add Inbound Device
+              <Plus size={15} /> Add Device
             </button>
           </div>
         </div>
@@ -411,7 +409,7 @@ export function DevicesPage() {
           onClick={() => setActiveTab("devices")}
           style={{ fontWeight: 600 }}
         >
-          <Server size={15} /> Inbound Devices ({items.length})
+          <Server size={15} /> Devices ({items.length})
         </button>
         <button
           type="button"
@@ -420,7 +418,7 @@ export function DevicesPage() {
           style={{ fontWeight: 600 }}
         >
           <Flame size={15} style={{ color: activeTab === "scale" ? "#fff" : "#f97316" }} />
-          Million-Log Scaling &amp; Load Balancer
+          Scaling &amp; Load Balancer
         </button>
       </div>
 
@@ -428,29 +426,29 @@ export function DevicesPage() {
       <div className="grid col-4" style={{ marginBottom: 24, gap: 16 }}>
         <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>CONNECTED FLEET</span>
+            <span>DEVICES</span>
             <Server size={15} />
           </div>
           <div style={{ fontSize: "1.85rem", fontWeight: 700 }}>{items.length}</div>
           <div className="faint small" style={{ marginTop: 4 }}>
-            {activeCount} streaming active · {items.length - activeCount} pending
+            {activeCount} active · {items.length - activeCount} idle
           </div>
         </div>
 
         <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>TOTAL LOGS INGESTED</span>
+            <span>LOGS INGESTED</span>
             <Cpu size={15} />
           </div>
           <div style={{ fontSize: "1.85rem", fontWeight: 700 }}>{totalEvents.toLocaleString()}</div>
           <div className="faint small" style={{ marginTop: 4 }}>
-            Direct device wire payloads normalized
+            Normalized wire payloads
           </div>
         </div>
 
         <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>THROUGHPUT RATE</span>
+            <span>THROUGHPUT</span>
             <Activity size={15} style={{ color: "var(--ok, #10b981)" }} />
           </div>
           <div style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--ok, #10b981)" }}>
@@ -463,11 +461,11 @@ export function DevicesPage() {
 
         <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>INTEGRITY &amp; OCSF</span>
+            <span>INTEGRITY</span>
             <ShieldCheck size={15} style={{ color: "var(--accent, #6366f1)" }} />
           </div>
           <div style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--accent, #6366f1)" }}>100%</div>
-          <div className="faint small" style={{ marginTop: 4 }}>Zero loss · Deterministic hashes</div>
+          <div className="faint small" style={{ marginTop: 4 }}>Zero loss · Merkle-backed</div>
         </div>
       </div>
 
@@ -632,11 +630,11 @@ export function DevicesPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Device &amp; Credentials</th>
-                        <th>Category &amp; Vendor</th>
-                        <th>Protocol &amp; Format</th>
+                        <th>Device</th>
+                        <th>Vendor / Type</th>
+                        <th>Protocol</th>
                         <th>Status</th>
-                        <th>Ingested Events</th>
+                        <th>Events</th>
                         <th>Last Active</th>
                         <th style={{ textAlign: "right" }}>Actions</th>
                       </tr>
@@ -654,13 +652,13 @@ export function DevicesPage() {
                                 <span>{dev.name}</span>
                               </div>
                               <div className="mono small faint" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                                <span>Token: {dev.token}</span>
+                                <span>{dev.token}</span>
                                 <button
                                   type="button"
                                   className="button text small icon-only"
                                   style={{ padding: 0 }}
                                   onClick={() => copyText(dev.id + "-token", dev.token)}
-                                  title="Copy device token"
+                                  title="Copy token"
                                 >
                                   {copiedKey === dev.id + "-token" ? <Check size={11} style={{ color: "var(--ok)" }} /> : <Copy size={11} />}
                                 </button>
@@ -693,17 +691,16 @@ export function DevicesPage() {
                                 </span>
                               ) : (
                                 <span className="badge b-warn" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                                  <Clock size={11} /> WAITING FOR DATA
+                                  <Clock size={11} /> IDLE
                                 </span>
                               )}
                             </td>
                             <td>
                               <div style={{ fontWeight: 600 }}>{dev.event_count.toLocaleString()}</div>
-                              <div className="small faint">logs parsed</div>
                             </td>
                             <td>
-                              <div className="small">{dev.last_seen ? fmtTime(dev.last_seen) : <span className="faint">never</span>}</div>
-                              <div className="faint small">Created: {fmtTime(dev.created_at)}</div>
+                              <div className="small">{dev.last_seen ? fmtTime(dev.last_seen) : <span className="faint">—</span>}</div>
+                              <div className="faint small">{fmtTime(dev.created_at)}</div>
                             </td>
                             <td style={{ textAlign: "right" }}>
                               <div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
@@ -711,21 +708,21 @@ export function DevicesPage() {
                                   type="button"
                                   className="button small"
                                   onClick={() => openDumpModal(dev)}
-                                  title="Directly dump raw logs from this device"
+                                  title="Ingest payload directly from this device"
                                   style={{ background: "rgba(16, 185, 129, 0.1)", borderColor: "rgba(16, 185, 129, 0.3)", color: "var(--ok)" }}
                                 >
-                                  <Upload size={13} /> Dump Logs
+                                  <Upload size={13} /> Dump
                                 </button>
                                 <button
                                   type="button"
                                   className="button small"
                                   onClick={() => handleTestSignal(dev.id)}
                                   disabled={isTesting}
-                                  title="Simulate realistic wire log through the live pipeline"
+                                  title="Test signal through live pipeline"
                                   style={{ background: "rgba(99, 102, 241, 0.1)", borderColor: "rgba(99, 102, 241, 0.3)" }}
                                 >
                                   <Zap size={13} style={{ color: "var(--accent)" }} />
-                                  {isTesting ? "Streaming…" : "Test"}
+                                  {isTesting ? "…" : "Test"}
                                 </button>
                                 <button
                                   type="button"
@@ -735,7 +732,7 @@ export function DevicesPage() {
                                     const keys = Object.keys(dev.config_snippets || {});
                                     if (keys.length > 0) setSnippetTab(keys[0]);
                                   }}
-                                  title="View collector configs and copyable integration templates"
+                                  title="View collector configs"
                                 >
                                   <Code2 size={13} /> Config
                                 </button>
@@ -911,8 +908,8 @@ export function DevicesPage() {
               <div className="row spread" style={{ width: "100%", alignItems: "center" }}>
                 <div className="row" style={{ gap: 8, alignItems: "center" }}>
                   <Split size={18} style={{ color: "#38bdf8" }} />
-                  <span>Multi-Replica NGINX Load Balancer Topology</span>
-                  <span className="badge b-ok">{lb?.balance_status ?? "OPTIMALLY_BALANCED"}</span>
+                  <span>NGINX Load Balancer Topology</span>
+                  <span className="badge b-ok">{lb?.balance_status ?? "BALANCED"}</span>
                 </div>
                 <div className="row" style={{ gap: 8 }}>
                   <span className="small faint">Algorithm: <strong>{lb?.algorithm ?? "least_conn"}</strong></span>
@@ -921,11 +918,6 @@ export function DevicesPage() {
               </div>
             }
           >
-            <p className="faint small" style={{ marginTop: 0, marginBottom: 16 }}>
-              Inbound traffic from high-volume firewalls and forwarders terminates at the edge NGINX reverse proxy,
-              which balances requests across stateless backend replicas with keepalive pooling and zero-drop retry policies.
-            </p>
-
             {/* Replicas Grid */}
             <div className="grid col-4" style={{ gap: 14 }}>
               {(lb?.replicas ?? [
@@ -974,34 +966,28 @@ export function DevicesPage() {
             {/* Load balance stats strip */}
             <div className="row spread faint small" style={{ marginTop: 14, borderTop: "1px solid var(--border-color)", paddingTop: 10 }}>
               <span>Load balance ratio: <strong style={{ color: "#10b981" }}>{lb?.stateless_balance_ratio ?? 1.002}x (Equilibrium)</strong></span>
-              <span>Proxy keepalive: <strong>256k zone (64 idle sockets)</strong></span>
-              <span>Retry on connect timeout: <strong>Yes (max 2 tries, 0 drops)</strong></span>
+              <span>Proxy keepalive: <strong>256k zone</strong></span>
+              <span>Retry on timeout: <strong>Max 2 (0 drops)</strong></span>
             </div>
           </Card>
 
-          {/* Interactive Million-Log Stress Benchmark Studio */}
+          {/* Interactive Stress Benchmark */}
           <Card
             title={
               <div className="row spread" style={{ width: "100%", alignItems: "center" }}>
                 <div className="row" style={{ gap: 8, alignItems: "center" }}>
                   <Flame size={18} style={{ color: "#f97316" }} />
-                  <span>Enterprise Million-Log Scaling Benchmark Studio</span>
+                  <span>Scale Benchmark</span>
                 </div>
-                <span className="badge b-info">SCALE UP TO 1,000,000 LOGS</span>
+                <span className="badge b-info">Up to 1,000,000 Events</span>
               </div>
             }
           >
-            <p className="faint small" style={{ marginTop: 0, marginBottom: 16 }}>
-              Stress test LogForge AI's deterministic normalization pipeline under extreme log surges.
-              The generator streams wire logs across the 4-replica load balancer, validating SHA-256 Merkle proofs,
-              micro-batch commits, and measuring multi-core throughput up to <strong>1 Million Logs</strong>.
-            </p>
-
             {/* Presets and Controls */}
             <div className="grid col-2" style={{ gap: 16, marginBottom: 16 }}>
               <div>
                 <label className="small faint" style={{ display: "block", marginBottom: 6 }}>
-                  BURST VOLUME PRESET (Select Event Count):
+                  Volume:
                 </label>
                 <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                   {[1000, 10000, 50000, 100000, 500000, 1000000].map((num) => {
@@ -1018,7 +1004,7 @@ export function DevicesPage() {
                           color: isMillion && burstCount !== num ? "#f59e0b" : undefined,
                         }}
                       >
-                        {isMillion ? "🔥 1,000,000 (1 Million)" : `${num.toLocaleString()} Logs`}
+                        {isMillion ? "1,000,000" : `${num.toLocaleString()}`}
                       </button>
                     );
                   })}
@@ -1027,7 +1013,7 @@ export function DevicesPage() {
 
               <div>
                 <label className="small faint" style={{ display: "block", marginBottom: 6 }}>
-                  MULTI-VENDOR WORKLOAD MIX:
+                  Vendor mix:
                 </label>
                 <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                   {[
@@ -1058,7 +1044,7 @@ export function DevicesPage() {
             {/* Action Button */}
             <div className="row spread" style={{ alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: 14 }}>
               <div className="small faint">
-                Chunk size: <strong>250 events/micro-commit</strong> · Shared Runtime Registry · Lossless Spilling
+                Micro-commit: <strong>250 events</strong> · Zero-loss spilling
               </div>
               <button
                 type="button"
@@ -1073,8 +1059,8 @@ export function DevicesPage() {
               >
                 <Play size={14} />
                 {runningBenchmark
-                  ? `Simulating ${burstCount.toLocaleString()} Events across 4 Replicas…`
-                  : `Execute ${burstCount.toLocaleString()} Log Surge`}
+                  ? `Processing ${burstCount.toLocaleString()} events…`
+                  : `Run ${burstCount.toLocaleString()} events`}
               </button>
             </div>
 
@@ -1092,8 +1078,8 @@ export function DevicesPage() {
                 <div className="row spread" style={{ alignItems: "center", marginBottom: 12 }}>
                   <div className="row" style={{ gap: 8, alignItems: "center" }}>
                     <CheckCircle2 size={20} style={{ color: "var(--ok, #10b981)" }} />
-                    <span style={{ fontSize: "1.1rem", fontWeight: 700 }}>
-                      Surge Completed: {benchmarkResult.events_processed.toLocaleString()} Events Processed in {benchmarkResult.elapsed_seconds ? `${benchmarkResult.elapsed_seconds} s` : `${benchmarkResult.elapsed_ms} ms`}
+                    <span style={{ fontSize: "1rem", fontWeight: 700 }}>
+                      Completed: {benchmarkResult.events_processed.toLocaleString()} events in {benchmarkResult.elapsed_seconds ? `${benchmarkResult.elapsed_seconds}s` : `${benchmarkResult.elapsed_ms}ms`}
                     </span>
                   </div>
                   <span className="badge b-ok" style={{ fontSize: "0.95rem", padding: "4px 12px", fontWeight: 700 }}>
@@ -1103,13 +1089,13 @@ export function DevicesPage() {
 
                 <div className="grid col-4" style={{ gap: 12, marginTop: 12 }}>
                   <div style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6 }}>
-                    <span className="faint small">Throughput Speed:</span>
+                    <span className="faint small">Throughput:</span>
                     <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#10b981", marginTop: 2 }}>
                       {benchmarkResult.throughput_eps.toLocaleString()} <span style={{ fontSize: "0.75rem", color: "var(--text-faint)" }}>EPS</span>
                     </div>
                   </div>
                   <div style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6 }}>
-                    <span className="faint small">Wall Clock Elapsed:</span>
+                    <span className="faint small">Elapsed:</span>
                     <div style={{ fontSize: "1.25rem", fontWeight: 700, marginTop: 2 }}>
                       {benchmarkResult.elapsed_seconds ? `${benchmarkResult.elapsed_seconds}s` : `${benchmarkResult.elapsed_ms}ms`}
                     </div>

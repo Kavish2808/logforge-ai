@@ -152,7 +152,7 @@ export function Overview() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Operational Metrics</div>
+          <div className="eyebrow">Telemetry</div>
           <h1>Overview</h1>
           <p>Real-time log volume, normalization rates, adapter status, and pipeline health.</p>
         </div>
