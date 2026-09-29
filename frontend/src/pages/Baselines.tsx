@@ -193,6 +193,7 @@ export function Baselines({ sourceKey }: { sourceKey: string | null }) {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Adapt · baseline integrity</div>
           <h1>Baseline Integrity</h1>
           <p>CURRENT baselines evolve through human drift review and learning; GOLDEN baselines are pinned references that guard against gradual poisoning.</p>
         </div>

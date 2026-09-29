@@ -1,10 +1,11 @@
 // Governance — sign-in, roles (RBAC), review SLAs, runtime configuration and the published RBAC policy.
 import { FormEvent, useState } from "react";
+import { KeyRound, Lock, ShieldCheck, UserRound, Users as UsersIcon } from "lucide-react";
 import {
   bootstrapAdmin, createUser, getAuthStatus, getConfig, getPolicy, getReviews, listUsers, login, logout, putConfig, updateUser,
 } from "../api/endpoints";
 import { duration } from "../components/trust";
-import { Badge, Card, KV, Load, Stat } from "../components/ui";
+import { Badge, Card, KV, Kpi, Load, Stat } from "../components/ui";
 import { can, clearAuth, setAuth, useAuth } from "../lib/auth";
 import { num } from "../lib/format";
 import { Link } from "../lib/router";
@@ -220,6 +221,56 @@ function Policy() {
   );
 }
 
+const ROLE_BLURB: Record<string, string> = {
+  ANALYST: "Inspect evidence, review, propose changes and export.",
+  SECURITY_ENGINEER: "Approves adapters, drift and learning; performs rollback.",
+  SOC_ADMIN: "Owns governance configuration, users and critical approvals.",
+};
+
+/** Posture + role hierarchy, straight from GET /auth/status (roles and capabilities are the server's). */
+function Posture() {
+  const status = useApi((s) => getAuthStatus(s), []);
+  const { user } = useAuth();
+  return (
+    <Load state={status}>
+      {(st) => {
+        const roles = st.roles ?? Object.keys(st.capabilities ?? {});
+        return (
+          <>
+            <div className="kpis">
+              <Kpi label="Current user" value={user ? user.username : "anonymous"} icon={UserRound} tone={user ? "cyan" : undefined}
+                hint={user ? "bearer token (session tab only)" : "not signed in"} />
+              <Kpi label="Role" value={user ? user.role.replace(/_/g, " ") : "—"} icon={KeyRound} hint={user ? `${user.capabilities.length} capabilities` : "no role"} />
+              <Kpi label="Authentication" value={user ? "Authenticated" : "Anonymous"} icon={Lock} tone={user ? "ok" : "warn"} hint="local accounts · PBKDF2" />
+              <Kpi label="RBAC mode" value={st.rbac_mode} icon={ShieldCheck} tone={st.rbac_mode === "enforce" ? "ok" : "warn"}
+                hint={st.production_safe === false ? "not production-safe" : st.app_env ? `app env: ${st.app_env}` : "server-enforced"} />
+              <Kpi label="Maker-checker" value="On" icon={UsersIcon} tone="ok" hint="authors cannot approve critical actions" />
+            </div>
+            <Card title="Role hierarchy" actions={<span className="small faint">each role holds every capability of the roles below it</span>}>
+              <div className="roles">
+                {roles.map((r, i) => {
+                  const caps = st.capabilities?.[r] ?? [];
+                  const below = i > 0 ? st.capabilities?.[roles[i - 1]] ?? [] : [];
+                  return (
+                    <div key={r} className={`role-card${user?.role === r ? " current" : ""}`}>
+                      <div className="role-rank">LEVEL {String(i + 1).padStart(2, "0")}{user?.role === r ? " · YOU" : ""}</div>
+                      <h4><Badge value={r} /></h4>
+                      <p className="small" style={{ marginBottom: 10 }}>{ROLE_BLURB[r] ?? ""}</p>
+                      <ul aria-label={`${r} capabilities`}>
+                        {caps.map((c) => <li key={c} className={below.includes(c) ? "inherited" : ""} title={below.includes(c) ? "inherited" : "granted at this level"}>{c}</li>)}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </>
+        );
+      }}
+    </Load>
+  );
+}
+
 export function GovernancePage() {
   const { user } = useAuth();
   const admin = can(user, "manage_roles");
@@ -227,11 +278,13 @@ export function GovernancePage() {
     <>
       <div className="page-head">
         <div>
+          <div className="eyebrow">Trust · administration</div>
           <h1>Governance</h1>
           <p>Roles (ANALYST · SECURITY_ENGINEER · SOC_ADMIN), maker-checker on critical approvals, review SLAs and runtime configuration — every change audited.</p>
         </div>
         <Link to="audit">Audit log →</Link>
       </div>
+      <Posture />
       <div className="grid g2">
         <SignIn />
         {admin ? <Users /> : (

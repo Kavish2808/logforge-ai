@@ -4,12 +4,16 @@ import { EMPTY_FILTERS, EventFilterBar, EventFilterState, toQuery } from "../com
 import { EventTable } from "../components/EventTable";
 import { Card, CursorPager, Load } from "../components/ui";
 import { num } from "../lib/format";
+import { onSearch, takePendingSearch } from "../lib/search";
 import { useApi } from "../lib/useApi";
 
 const PAGE = 50;
 
 export function EventExplorer() {
-  const [filters, setFilters] = useState<EventFilterState>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<EventFilterState>(() => {
+    const q = takePendingSearch();
+    return q ? { ...EMPTY_FILTERS, search: q } : EMPTY_FILTERS;
+  });
   // Stack of cursors: [null (newest page), cursor-for-page-2, ...]. Only the current page is fetched.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const cursor = cursors[cursors.length - 1];
@@ -28,11 +32,14 @@ export function EventExplorer() {
     setCursors([null]);
     setTotal(null);
   };
+  // The top-bar search re-targets this page while it is open.
+  useEffect(() => onSearch((q) => applyFilters({ ...EMPTY_FILTERS, search: q })), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
       <div className="page-head">
         <div>
+          <div className="eyebrow">Investigate evidence</div>
           <h1>Event Explorer</h1>
           <p>Server-side filtering with stable cursor pagination on (received_at, event_id). Select a row for its full forensic lineage.</p>
         </div>

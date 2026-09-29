@@ -1,8 +1,10 @@
 // Integrity — Phase 7 evidence layer: Merkle evidence chain + anchors, cold raw
 // vault (hot/cold distribution), and extension overflow with onboarding evidence.
 import { useState } from "react";
+import { Fingerprint, LoaderCircle, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
+import type { AuditVerify, TrustSummary } from "../api/types";
 import {
-  backfillVault, getBatches, getOverflowEvidence, getTrust, overflowToOnboarding, recoverRaw, sealNow, verifyChain, verifyEvent,
+  verifyAudit, backfillVault, getBatches, getOverflowEvidence, getTrust, overflowToOnboarding, recoverRaw, sealNow, verifyChain, verifyEvent,
 } from "../api/endpoints";
 import type { ChainVerify, EventVerify, RawRecovery } from "../api/types";
 import { CompactLineageStatsCard } from "../components/forensics";
@@ -119,6 +121,61 @@ function EventCheck() {
   );
 }
 
+/** Central evidence status. VERIFIED is shown only after a real full verification in this session. */
+function IntegrityHero({ t }: { t: TrustSummary }) {
+  const [chain, setChain] = useState<ChainVerify | null>(null);
+  const [audit, setAudit] = useState<AuditVerify | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const sealedTotal = t.integrity.events_sealed + t.integrity.events_unsealed;
+  const coverage = sealedTotal ? (t.integrity.events_sealed / sealedTotal) * 100 : 0;
+  const run = async () => {
+    setBusy(true); setError(null); setAuditError(null);
+    try { setChain(await verifyChain()); } catch (err) { setError(errorMessage(err)); }
+    try { setAudit(await verifyAudit()); } catch (err) { setAuditError(errorMessage(err)); }
+    setBusy(false);
+  };
+  const verdict = !chain ? "na" : chain.valid && (!audit || audit.valid) ? "ok" : "fail";
+  const Icon = verdict === "ok" ? ShieldCheck : verdict === "fail" ? ShieldAlert : ShieldQuestion;
+  return (
+    <Card className="hero">
+      <div className="seal">
+        <div className="seal-ring" style={{ ["--seal-pct" as string]: coverage.toFixed(1), ["--seal-color" as string]: coverage >= 99.95 ? "var(--ok)" : "var(--warn)" }}
+          role="img" aria-label={`${coverage.toFixed(1)}% of events Merkle-sealed`}>
+          <div className="seal-inner"><div className="seal-pct">{sealedTotal ? `${coverage >= 99.95 ? coverage.toFixed(0) : coverage.toFixed(1)}%` : "—"}</div><div className="seal-cap">sealed</div></div>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className={`seal-status ${verdict}`}><Icon size={22} aria-hidden="true" />
+            {verdict === "ok" ? "VERIFIED" : verdict === "fail" ? "VERIFICATION FAILED" : "NOT YET VERIFIED"}</div>
+          <p className="small" style={{ marginTop: 6 }}>
+            {chain
+              ? <>Merkle chain {chain.valid ? "valid" : "INVALID"}: {num(chain.batches_checked)} batch(es), {num(chain.events_sealed)} sealed event(s)
+                {typeof chain.events_rehashed === "number" ? `, ${num(chain.events_rehashed)} raw events re-hashed` : ""}
+                {chain.sealed_events_since_deleted ? `, ${num(chain.sealed_events_since_deleted)} sealed event(s) since deleted` : ""}
+                {audit ? <> · audit chain {audit.valid ? "valid" : `BROKEN at record ${audit.first_break_seq}`} ({num(audit.records_checked)} records)</> : null}
+                {" "}· verified {fmtTime(chain.verified_at)}</>
+              : <>Seal coverage is read from the database. Run a full verification to recompute every leaf, root, chain link and anchor, re-hash stored raw events, and walk the audit hash chain.</>}
+          </p>
+          {chain && chain.problems.length > 0 && (
+            <ul className="small" style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+              {chain.problems.slice(0, 5).map((p, i) => <li key={i}><span className="mono">batch {String(p.seq)}</span>: {p.problem}</li>)}
+            </ul>
+          )}
+          {error && <div className="notice fail" role="alert" style={{ marginTop: 8 }}>{error}</div>}
+          {auditError && <div className="notice warn" role="status" style={{ marginTop: 8 }}>Audit chain not verified: {auditError}</div>}
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="primary" onClick={run} disabled={busy}>
+              {busy ? <LoaderCircle size={15} className="spin" /> : <Fingerprint size={15} />} Run full verification
+            </button>
+            {t.integrity.head && <span className="hashline" title={t.integrity.head.chain_hash}>head #{t.integrity.head.seq} · {shortHash(t.integrity.head.chain_hash, 24)}</span>}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function IntegrityPage() {
   const trust = useApi((s) => getTrust(s), []);
   const evidence = useApi((s) => getOverflowEvidence(s), []);
@@ -144,11 +201,15 @@ export function IntegrityPage() {
     <>
       <div className="page-head">
         <div>
+          <div className="eyebrow">Evidence integrity</div>
           <h1>Integrity</h1>
           <p>Evidence you can verify: SHA-256 per event, a chained Merkle evidence log with append-only anchors, a cold raw vault, and lossless extension overflow.</p>
         </div>
       </div>
       {msg && <div className={`notice ${msg.kind}`} role="status">{msg.text}</div>}
+      <Load state={trust}>
+        {(t) => <IntegrityHero t={t} />}
+      </Load>
       <Load state={trust}>
         {(t) => (
           <div className="stats">

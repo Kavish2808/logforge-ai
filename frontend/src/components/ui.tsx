@@ -1,5 +1,6 @@
 // Shared presentational components. They only render values they are given.
 import { ReactNode, useId, useState } from "react";
+import { Inbox, LucideIcon } from "lucide-react";
 import type { ApiState } from "../lib/useApi";
 import { pct } from "../lib/format";
 
@@ -30,10 +31,10 @@ export function Badge({ value, title }: { value: string | null | undefined; titl
   return <span className={`badge ${STATUS_CLASS[value] ?? ""}`} title={title}>{value.replace(/_/g, " ")}</span>;
 }
 
-export function Stat({ label, value, hint, accent }: { label: string; value: ReactNode; hint?: ReactNode; accent?: boolean }) {
+export function Stat({ label, value, hint, accent, icon: Icon }: { label: string; value: ReactNode; hint?: ReactNode; accent?: boolean; icon?: LucideIcon }) {
   return (
     <div className={`stat${accent ? " accent" : ""}`}>
-      <div className="label">{label}</div>
+      <div className="label">{Icon && <Icon size={13} aria-hidden="true" />}{label}</div>
       <div className="value">{value}</div>
       {hint !== undefined && <div className="hint">{hint}</div>}
     </div>
@@ -61,7 +62,14 @@ export function Load<T>({ state, children, empty, isEmpty }: {
   empty?: ReactNode;
   isEmpty?: (data: T) => boolean;
 }) {
-  if (state.loading && state.data === null) return <div className="state" role="status">Loading…</div>;
+  if (state.loading && state.data === null) {
+    return (
+      <div className="skeleton" role="status" aria-live="polite">
+        <i /><i /><i /><i />
+        <span className="small faint">Loading…</span>
+      </div>
+    );
+  }
   if (state.error) {
     return (
       <div className="state error" role="alert">
@@ -71,8 +79,35 @@ export function Load<T>({ state, children, empty, isEmpty }: {
     );
   }
   if (state.data === null) return null;
-  if (isEmpty && isEmpty(state.data)) return <div className="state">{empty ?? "Nothing to show yet."}</div>;
+  if (isEmpty && isEmpty(state.data)) return <EmptyState>{empty ?? "Nothing to show yet."}</EmptyState>;
   return <>{children(state.data)}</>;
+}
+
+/** Empty state with an icon; the message is always the real reason there is nothing to show. */
+export function EmptyState({ children, title, icon: Icon = Inbox, action }: { children?: ReactNode; title?: string; icon?: LucideIcon; action?: ReactNode }) {
+  return (
+    <div className="empty">
+      <div className="empty-icon" aria-hidden="true"><Icon size={20} /></div>
+      {title && <strong>{title}</strong>}
+      {children && <span>{children}</span>}
+      {action}
+    </div>
+  );
+}
+
+/** Dashboard KPI tile. `tone` only colors the icon; the value is always the real metric. */
+export function Kpi({ label, value, hint, icon: Icon, tone, children }: {
+  label: string; value: ReactNode; hint?: ReactNode; icon: LucideIcon; tone?: "ok" | "warn" | "fail" | "cyan"; children?: ReactNode;
+}) {
+  return (
+    <div className={`kpi${tone ? ` ${tone}` : ""}`}>
+      <span className="kpi-icon" aria-hidden="true"><Icon size={16} /></span>
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value">{value}</div>
+      {hint !== undefined && <div className="kpi-hint">{hint}</div>}
+      {children}
+    </div>
+  );
 }
 
 export function KV({ items }: { items: [string, ReactNode][] }) {
@@ -128,7 +163,7 @@ export function Bars({ data, colorFor, limit = 10 }: { data: Record<string, numb
 }
 
 export const STATUS_COLORS: Record<string, string> = {
-  SUCCESS: "#1a7f4b", PARTIAL: "#d08a12", FAILED: "#b42318", UNDER_REVIEW: "#6e44d6",
+  SUCCESS: "#3ddc97", PARTIAL: "#f5b945", FAILED: "#ff6b6b", UNDER_REVIEW: "#b39cff",
 };
 
 export function TrendChart({ buckets, bucket }: { buckets: { bucket: string; by_status: Record<string, number>; total: number }[]; bucket: string }) {

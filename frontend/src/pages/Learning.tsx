@@ -28,6 +28,7 @@ function List() {
     <>
       <div className="page-head">
         <div>
+<div className="eyebrow">Adapt · continuous learning</div>
           <h1>Learning</h1>
           <p>Phase 6 learns only drift a human accepted — through validation and a separate approval. Nothing activates on its own.</p>
         </div>
