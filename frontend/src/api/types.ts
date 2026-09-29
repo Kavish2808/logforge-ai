@@ -482,3 +482,121 @@ export interface IntegrationItem {
   created_by: string;
   created_at: string;
 }
+
+export interface DeviceLogEntry {
+  event_id: string;
+  status: string;
+  format_detected: string;
+  adapter_id: string;
+  raw_hash: string;
+  timestamp: string;
+}
+
+export interface Device {
+  id: string;
+  name: string;
+  device_type: string;
+  vendor: string;
+  protocol: string;
+  format: string;
+  description: string;
+  token: string;
+  status: "ACTIVE" | "WAITING_FOR_DATA" | "OFFLINE";
+  event_count: number;
+  last_seen: string | null;
+  created_at: string;
+  created_by?: string;
+  config_snippets: Record<string, string>;
+  recent_logs?: DeviceLogEntry[];
+}
+
+export interface DumpFleetResult {
+  ok: boolean;
+  message: string;
+  devices_streamed: number;
+  events_ingested: number;
+  success_count: number;
+  partial_count: number;
+  elapsed_ms: number;
+  per_device_distribution: Record<string, number>;
+  zero_loss_guarantee: string;
+}
+
+export interface DeviceTestResult {
+  ok: boolean;
+  message: string;
+  device: Device;
+  event: {
+    event_id: string;
+    status: string;
+    format_detected: string;
+    adapter_used: string;
+    raw_sha256: string;
+    raw_sample: string;
+  };
+}
+
+// --- High-Scale Telemetry & Stress Benchmark -------------------------------------------------
+export interface ScaleMetrics {
+  current_eps: number;
+  peak_eps: number;
+  overall_avg_eps: number;
+  total_ingested: number;
+  total_bytes: number;
+  total_mb: number;
+  latency_p50_ms: number;
+  latency_p95_ms: number;
+  latency_p99_ms: number;
+  latency_avg_ms: number;
+  zero_loss_integrity_rate: number;
+  active_worker_threads: number;
+  batch_chunk_size: number;
+  last_burst: {
+    count: number;
+    eps: number;
+    elapsed_ms: number;
+  };
+}
+
+export interface ReplicaInfo {
+  id: string;
+  name: string;
+  address: string;
+  status: string;
+  weight: number;
+  active_connections: number;
+  processed_events: number;
+  traffic_share_pct: number;
+  mean_latency_ms: number;
+}
+
+export interface LoadBalancerTopology {
+  load_balancer_name: string;
+  listen_port: number;
+  algorithm: string;
+  proxy_protocol: string;
+  retries_on_failure: number;
+  failover_drop_count: number;
+  stateless_balance_ratio: number;
+  balance_status: string;
+  total_routed_events: number;
+  replicas: ReplicaInfo[];
+}
+
+export interface ScaleBenchmarkResult {
+  ok: boolean;
+  events_requested: number;
+  events_processed: number;
+  success_count: number;
+  partial_count: number;
+  failed_count: number;
+  elapsed_ms: number;
+  elapsed_seconds?: number;
+  throughput_eps: number;
+  bytes_processed: number;
+  throughput_mb_sec: number;
+  sample_event_ids: string[];
+  load_balancer_distribution?: Record<string, number>;
+  stateless_balance_ratio?: number;
+  zero_loss_guarantee: string;
+}

@@ -39,9 +39,9 @@ export function EventExplorer() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Investigate evidence</div>
+          <div className="eyebrow">LOG REPOSITORY</div>
           <h1>Event Explorer</h1>
-          <p>Server-side filtering with stable cursor pagination on (received_at, event_id). Select a row for its full forensic lineage.</p>
+          <p>Search, filter, and inspect normalized events with complete raw lineage.</p>
         </div>
       </div>
       <Card>

@@ -119,3 +119,43 @@ export const exportEvents = (query: Query) => download("/export/events", { query
 export const listIntegrations = (signal?: Sig) => request<import("./types").IntegrationItem[]>("/integrations", { signal });
 export const createIntegration = (body: { name: string; url: string }) =>
   request<import("./types").IntegrationItem>("/integrations", { method: "POST", body });
+
+// --- Connected Devices API -------------------------------------------------------------------
+export const listDevices = (signal?: Sig) => request<import("./types").Device[]>("/devices", { signal });
+export const createDevice = (body: {
+  name: string;
+  device_type?: string;
+  vendor?: string;
+  protocol?: string;
+  format?: string;
+  description?: string;
+}) => request<import("./types").Device>("/devices", { method: "POST", body });
+export const deleteDevice = (id: string) => request<{ ok: boolean; revoked_id: string }>(`/devices/${enc(id)}`, { method: "DELETE" });
+export const updateDevice = (id: string, body: Partial<import("./types").Device>) =>
+  request<import("./types").Device>(`/devices/${enc(id)}`, { method: "PATCH", body });
+export const rotateDeviceToken = (id: string) =>
+  request<{ ok: boolean; device_id: string; token: string; config_snippets: Record<string, string> }>(
+    `/devices/${enc(id)}/rotate-token`,
+    { method: "POST" }
+  );
+export const testDeviceSignal = (id: string) => request<import("./types").DeviceTestResult>(`/devices/${enc(id)}/test`, { method: "POST" });
+export const dumpDeviceLogs = (id: string, logs: string[]) =>
+  request<{
+    ok: boolean;
+    device_id: string;
+    device_name: string;
+    accepted: number;
+    total: number;
+    success_count: number;
+    partial_count: number;
+    failed_count: number;
+    results: { event_id: string; status: string; format_detected: string; raw_hash: string }[];
+  }>(`/devices/${enc(id)}/logs`, { method: "POST", body: { logs } });
+export const dumpFleetLogs = () => request<import("./types").DumpFleetResult>("/devices/fleet/dump", { method: "POST" });
+
+// --- High-Scale Telemetry & Stress Benchmark -------------------------------------------------
+export const getScaleMetrics = (signal?: Sig) => request<import("./types").ScaleMetrics>("/scale/metrics", { signal });
+export const getLoadBalancerTopology = (signal?: Sig) =>
+  request<import("./types").LoadBalancerTopology>("/scale/loadbalancer", { signal });
+export const runScaleBenchmark = (body: { count: number; target_eps?: number; vendor_mix?: string[] }) =>
+  request<import("./types").ScaleBenchmarkResult>("/scale/benchmark", { method: "POST", body });

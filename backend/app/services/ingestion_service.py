@@ -58,7 +58,13 @@ class BatchIngestResult:
         self.under_review_count = sum(1 for r in results if r.status == EventStatus.UNDER_REVIEW)
 
 
-def ingest_raw_log(db: Session, raw_log: str, source: str | None = None) -> UniversalEvent:
+def ingest_raw_log(
+    db: Session,
+    raw_log: str,
+    source: str | None = None,
+    adapter_registry: dict | None = None,
+    commit: bool = True,
+) -> UniversalEvent:
     """Ingest a single raw log. Never raises: any unexpected failure in the
     pipeline or the database write still results in a persisted, FAILED
     event carrying the raw log and its hash, rather than a lost event or
@@ -66,7 +72,7 @@ def ingest_raw_log(db: Session, raw_log: str, source: str | None = None) -> Univ
     try:
         event_id = generate_event_id()
         # Shipped YAML adapters + human-approved onboarded adapters; never an LLM.
-        registry = onboarding_service.runtime_registry(db)
+        registry = adapter_registry if adapter_registry is not None else onboarding_service.runtime_registry(db)
         result = run_pipeline(raw_log, adapter_registry=registry)
         fields = _pipeline_result_fields(result)
         if source and not fields.get("adapter_id"):
@@ -82,19 +88,43 @@ def ingest_raw_log(db: Session, raw_log: str, source: str | None = None) -> Univ
         db.add(event)
         db.flush()
         evidence_service.persist_new(db, event, spill)
-        saved = event_repo.create_event(db, event)
+        saved = event_repo.create_event(db, event, commit=commit)
         return UniversalEvent.model_validate(saved, from_attributes=True)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Unexpected error ingesting a log; falling back to raw-only preservation.")
         db.rollback()
-        return _record_pipeline_exception(db, raw_log, exc)
+        return _record_pipeline_exception(db, raw_log, exc, commit=commit)
 
 
-def ingest_batch(db: Session, raw_logs: list[str], source: str | None = None) -> BatchIngestResult:
-    """Ingests each log independently: one bad or even crashing log can
-    never abort the rest of the batch, because ingest_raw_log itself never
-    raises and always commits its own event."""
-    results = [ingest_raw_log(db, raw_log, source=source) for raw_log in raw_logs]
+def ingest_batch(
+    db: Session,
+    raw_logs: list[str],
+    source: str | None = None,
+    chunk_size: int = 250,
+) -> BatchIngestResult:
+    """Ingests logs with high-scale micro-batch commits and cached runtime registry.
+    One bad log can never abort the batch, because each item handles its own fallback."""
+    if not raw_logs:
+        return BatchIngestResult([])
+    registry = onboarding_service.runtime_registry(db)
+    results: list[UniversalEvent] = []
+
+    for i in range(0, len(raw_logs), chunk_size):
+        chunk = raw_logs[i : i + chunk_size]
+        chunk_results: list[UniversalEvent] = []
+        try:
+            for raw_log in chunk:
+                res = ingest_raw_log(db, raw_log, source=source, adapter_registry=registry, commit=False)
+                chunk_results.append(res)
+            db.commit()
+            results.extend(chunk_results)
+        except Exception:
+            db.rollback()
+            # If the chunk commit fails, retry this chunk safely with per-item isolation
+            for raw_log in chunk:
+                res = ingest_raw_log(db, raw_log, source=source, adapter_registry=registry, commit=True)
+                results.append(res)
+
     return BatchIngestResult(results)
 
 
@@ -142,7 +172,7 @@ def reprocess_event(db: Session, event: Event) -> UniversalEvent:
     return UniversalEvent.model_validate(updated, from_attributes=True)
 
 
-def _record_pipeline_exception(db: Session, raw_log: str, exc: Exception) -> UniversalEvent:
+def _record_pipeline_exception(db: Session, raw_log: str, exc: Exception, commit: bool = True) -> UniversalEvent:
     """Persists a raw log as a FAILED event when something raised an
     exception the deterministic pipeline itself is not supposed to raise
     (a bug, or a database-level rejection). The raw log and its hash are
@@ -161,7 +191,7 @@ def _record_pipeline_exception(db: Session, raw_log: str, exc: Exception) -> Uni
         warnings=[],
         error_message=f"Unexpected pipeline error ({type(exc).__name__}). See server logs for details.",
     )
-    saved = event_repo.create_event(db, event)
+    saved = event_repo.create_event(db, event, commit=commit)
     return UniversalEvent.model_validate(saved, from_attributes=True)
 
 

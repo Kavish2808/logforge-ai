@@ -93,9 +93,9 @@ export function IngestPage() {
     <>
     <div className="page-head">
       <div>
-        <div className="eyebrow">Pipeline input</div>
+        <div className="eyebrow">DATA INGESTION</div>
         <h1>Ingest Logs</h1>
-        <p>Submit raw logs through the real pipeline: detection, parsing, normalization, raw preservation and SHA-256 fingerprinting — even when parsing is incomplete.</p>
+        <p>Submit raw logs into the parsing, normalization, and cryptographic vault pipeline.</p>
       </div>
     </div>
     <div className="ingest-layout">
@@ -103,8 +103,8 @@ export function IngestPage() {
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <h2>Ingestion workspace</h2>
-              <p>Paste a log, upload a file, or submit a complete batch</p>
+              <h2>Ingestion Console</h2>
+              <p>Direct entry, file upload, or batch payload</p>
             </div>
             <span className="secure-label">
               <ShieldCheck size={14} />

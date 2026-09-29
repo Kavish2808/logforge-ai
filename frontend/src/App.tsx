@@ -6,12 +6,11 @@ import {
   Blocks,
   Cable,
   ChevronDown,
+  ChevronRight,
   Database,
   FileText,
   Fingerprint,
   GitBranch,
-  GitCompareArrows,
-  Hexagon,
   Layers3,
   LayoutDashboard,
   LogIn,
@@ -23,12 +22,14 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Server,
   ShieldCheck,
   Sparkles,
   Upload,
   UserRound,
   Workflow,
   Wand2,
+  X,
 } from "lucide-react";
 import { getAlertCounts, getHealth, getSummary, logout } from "./api/endpoints";
 import { Quiet } from "./components/trust";
@@ -44,6 +45,7 @@ import { ReplayPage } from "./pages/Replay";
 import { AlertsPage } from "./pages/Alerts";
 import { AuditPage } from "./pages/Audit";
 import { Demo } from "./pages/Demo";
+import { DevicesPage } from "./pages/Devices";
 import { DriftQueue } from "./pages/DriftQueue";
 import { EventExplorer } from "./pages/EventExplorer";
 import { EventForensics } from "./pages/EventForensics";
@@ -65,54 +67,52 @@ interface NavItem {
   description: string;
 }
 
-const NAV: { group: string; items: NavItem[] }[] = [
+// Core day-to-day operations for an operator / analyst
+const PRIMARY_NAV: NavItem[] = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard, description: "System health & metrics" },
+  { id: "events", label: "Events", icon: Layers3, description: "Normalized logs & lineage" },
+  { id: "ingest", label: "Ingest", icon: Upload, description: "Submit raw logs" },
+  { id: "devices", label: "Devices", icon: Server, description: "Syslog feeds & collectors" },
+  { id: "drift", label: "Drift", icon: Activity, description: "Schema changes awaiting review" },
+  { id: "alerts", label: "Alerts", icon: Bell, description: "System & security alerts" },
+  { id: "export", label: "Export", icon: ArrowDownToLine, description: "Log data egress & SIEM" },
+];
+
+// Deep analysis, compliance, and administration tools
+const ADVANCED_NAV: { group: string; items: NavItem[] }[] = [
   {
-    group: "Overview",
+    group: "Adapters",
     items: [
-      { id: "overview", label: "Dashboard", icon: LayoutDashboard, description: "Operational intelligence across ingestion, normalization, integrity and adaptation" },
-      { id: "events", label: "Event Explorer", icon: Layers3, description: "Search and investigate normalized evidence with full lineage" },
-      { id: "ingest", label: "Ingest Logs", icon: Upload, description: "Submit raw logs through the real pipeline" },
-      { id: "sources", label: "Sources", icon: Database, description: "Every observed source, its adapter, baseline and drift" },
+      { id: "sources", label: "Sources", icon: Database, description: "Log sources & active parsers" },
+      { id: "onboarding", label: "Onboarding", icon: Wand2, description: "Generate new adapters" },
+      { id: "evolution", label: "Evolution", icon: GitBranch, description: "Version history & diffs" },
+      { id: "learning", label: "Learning", icon: Sparkles, description: "Adapter proposals" },
+      { id: "advanced-drift", label: "Drift Analysis", icon: Workflow, description: "Statistical change detection" },
+      { id: "baselines", label: "Baselines", icon: ShieldCheck, description: "Golden schema baselines" },
     ],
   },
   {
-    group: "Adapt",
+    group: "Forensics",
     items: [
-      { id: "onboarding", label: "Adaptive Onboarding", icon: Wand2, description: "Teach LogForge a new log source without hand-written parsers" },
-      { id: "evolution", label: "Adapter Evolution", icon: GitBranch, description: "Versioned adapters that evolve under evidence and approval" },
-      { id: "learning", label: "Learning", icon: Sparkles, description: "Evidence-driven adapter changes, validated before approval" },
-      { id: "advanced-drift", label: "Advanced Drift", icon: Workflow, description: "Structural, statistical and semantic change detection" },
-      { id: "drift", label: "Drift Queue", icon: Activity, description: "Structural drift awaiting a human decision" },
-      { id: "baselines", label: "Baselines", icon: ShieldCheck, description: "Current and golden baselines with poisoning evidence" },
+      { id: "correlations", label: "Correlations", icon: Radio, description: "Multi-source incident correlation" },
+      { id: "replay", label: "Replay", icon: RotateCcw, description: "Historical re-processing" },
     ],
   },
   {
-    group: "Investigate",
+    group: "Governance",
     items: [
-      { id: "correlations", label: "Correlations", icon: Radio, description: "Cross-source drift grouped into scored investigations" },
-      { id: "replay", label: "Replay & Revisions", icon: RotateCcw, description: "Rate-limited replay with append-only, verifiable revisions" },
+      { id: "integrity", label: "Integrity", icon: Fingerprint, description: "WORM vault & Merkle proofs" },
+      { id: "audit", label: "Audit", icon: FileText, description: "Cryptographic audit trail" },
+      { id: "governance", label: "Access & RBAC", icon: ShieldCheck, description: "Roles & maker-checker rules" },
+      { id: "integrations", label: "Integrations", icon: Cable, description: "Alert & SIEM webhooks" },
+      { id: "demo", label: "Demo Mode", icon: Play, description: "Automated end-to-end flow" },
     ],
   },
-  {
-    group: "Trust",
-    items: [
-      { id: "integrity", label: "Integrity", icon: Fingerprint, description: "SHA-256, raw vault and Merkle evidence chain" },
-      { id: "alerts", label: "Alerts", icon: Bell, description: "Security-relevant conditions raised by the platform" },
-      { id: "audit", label: "Audit Log", icon: FileText, description: "Hash-chained record of every governed action" },
-      { id: "governance", label: "Governance", icon: ShieldCheck, description: "Identity, roles, maker-checker, SLAs and configuration" },
-    ],
-  },
-  {
-    group: "Integrate",
-    items: [
-      { id: "export", label: "Export", icon: ArrowDownToLine, description: "Verified evidence export for SIEM and archive" },
-      { id: "integrations", label: "Integrations", icon: Cable, description: "Registered destinations and alert delivery channels" },
-    ],
-  },
-  {
-    group: "Showcase",
-    items: [{ id: "demo", label: "Demo", icon: Play, description: "The complete adaptive lifecycle, end to end" }],
-  },
+];
+
+const ALL_NAV_GROUPS = [
+  { group: "Operations", items: PRIMARY_NAV },
+  ...ADVANCED_NAV,
 ];
 
 const FIRST_VISIT_KEY = "logforge.entered";
@@ -130,7 +130,7 @@ function HealthPill() {
     <span className={`pill ${checking ? "" : ok ? "ok" : "fail"}`} aria-live="polite"
       title={checking ? "Checking API…" : ok ? "API + database healthy" : "API unreachable"}>
       <span className={`dot ${checking ? "" : ok ? "ok" : "fail"}`} aria-hidden="true" style={{ marginRight: 0 }} />
-      <span className="pill-text">{checking ? "Checking…" : ok ? "System healthy" : "API unreachable"}</span>
+      <span className="pill-text">{checking ? "Checking…" : ok ? "Healthy" : "Offline"}</span>
     </span>
   );
 }
@@ -285,6 +285,8 @@ export default function App() {
         return <AdapterEvolution sourceKey={route.param} />;
       case "learning":
         return <Learning sessionId={route.param} />;
+      case "devices":
+        return <DevicesPage />;
       case "export":
         return <ExportPage />;
       case "integrations":
@@ -304,60 +306,89 @@ export default function App() {
     }
   })();
   const activeNav = section === "forensics" ? "events" : section;
-  const currentGroup = NAV.find((g) => g.items.some((i) => i.id === activeNav)) ?? NAV[0];
-  const currentNav = currentGroup.items.find((item) => item.id === activeNav) ?? NAV[0].items[0];
+  const isAdvancedActive = ADVANCED_NAV.some((g) => g.items.some((i) => i.id === activeNav));
+  const [toolsOpen, setToolsOpen] = useState(isAdvancedActive);
+
+  useEffect(() => {
+    if (isAdvancedActive) setToolsOpen(true);
+  }, [isAdvancedActive]);
+
+  const currentGroup = ALL_NAV_GROUPS.find((g) => g.items.some((i) => i.id === activeNav)) ?? ALL_NAV_GROUPS[0];
+  const currentNav = currentGroup.items.find((item) => item.id === activeNav) ?? PRIMARY_NAV[0];
 
   return (
     <div className={`shell${navOpen ? " nav-open" : ""}`}>
       <nav className="nav" aria-label="Primary" id="primary-nav">
-        <a className="brand" href={href("overview")} aria-label="LogForge AI dashboard">
-          <div className="brand-mark" aria-hidden="true"><Hexagon size={18} strokeWidth={2.4} /></div>
-          <div>
-            <div className="brand-name">LOGFORGE<span className="brand-ai">AI</span></div>
-            <div className="brand-sub">Universal Adaptive Log Pre-processing</div>
-          </div>
-        </a>
-
-        <div className="workspace-picker">
-          <div className="workspace-icon"><Blocks size={15} /></div>
-          <div>
-            <strong>Intelligence workspace</strong>
-            <span>SOC Production Environment</span>
-          </div>
-          <ChevronDown size={14} />
+        <div className="nav-brand-wrap">
+          <a className="brand" href={href("overview")} aria-label="LogForge Console" onClick={() => setNavOpen(false)}>
+            <div className="brand-mark" aria-hidden="true"><Layers3 size={16} strokeWidth={2.4} /></div>
+            <div>
+              <div className="brand-name">LOGFORGE</div>
+              <div className="brand-sub">Platform Console</div>
+            </div>
+          </a>
+          <button type="button" className="icon-button nav-close-btn" aria-label="Close navigation" onClick={() => setNavOpen(false)}>
+            <X size={15} />
+          </button>
         </div>
 
-        {NAV.map((g) => (
-          <div key={g.group} style={{ display: "contents" }}>
-            <div className="nav-group">{g.group}</div>
-            {g.items.map((item) => {
-              const Icon = item.icon;
-              return (
-                <a
-                  key={item.id}
-                  href={href(item.id)}
-                  className={activeNav === item.id ? "active" : ""}
-                  aria-current={activeNav === item.id ? "page" : undefined}
-                  title={item.description}
-                >
-                  <Icon size={16} aria-hidden="true" />
-                  <span className="nav-label">{item.label}</span>
-                  {item.id === "drift" && <PendingCount />}
-                  {item.id === "alerts" && <UnreadAlerts />}
-                </a>
-              );
-            })}
-          </div>
-        ))}
+        <div className="nav-group">Operations</div>
+        <div className="nav-primary-list">
+          {PRIMARY_NAV.map((item) => {
+            const Icon = item.icon;
+            return (
+              <a
+                key={item.id}
+                href={href(item.id)}
+                className={activeNav === item.id ? "active" : ""}
+                aria-current={activeNav === item.id ? "page" : undefined}
+                title={item.description}
+                onClick={() => setNavOpen(false)}
+              >
+                <Icon size={16} aria-hidden="true" />
+                <span className="nav-label">{item.label}</span>
+                {item.id === "drift" && <PendingCount />}
+                {item.id === "alerts" && <UnreadAlerts />}
+              </a>
+            );
+          })}
+        </div>
 
-        <div className="sidebar-bottom">
-          <div className="evidence-note">
-            <GitCompareArrows size={20} />
-            <div>
-              <strong>Never lose the evidence.</strong>
-              <div>Raw preserved · verifiable SHA-256 · Merkle-sealed</div>
+        <div className="nav-tools-section">
+          <button
+            type="button"
+            className={`nav-tools-toggle ${toolsOpen ? "open" : ""}`}
+            onClick={() => setToolsOpen(!toolsOpen)}
+            aria-expanded={toolsOpen}
+          >
+            <span>Advanced Tools</span>
+            {toolsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+          {toolsOpen && (
+            <div className="nav-tools-content">
+              {ADVANCED_NAV.map((g) => (
+                <div key={g.group} className="nav-subgroup">
+                  <div className="nav-group sub">{g.group}</div>
+                  {g.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <a
+                        key={item.id}
+                        href={href(item.id)}
+                        className={activeNav === item.id ? "active" : ""}
+                        aria-current={activeNav === item.id ? "page" : undefined}
+                        title={item.description}
+                        onClick={() => setNavOpen(false)}
+                      >
+                        <Icon size={15} aria-hidden="true" />
+                        <span className="nav-label">{item.label}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </nav>
       <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />
@@ -370,7 +401,7 @@ export default function App() {
           </button>
           <div className="topbar-title">
             <span className="crumb">{currentGroup.group}</span>
-            <span className="t">{section === "forensics" ? "Event forensics" : currentNav.label}</span>
+            <span className="t">{section === "forensics" ? "Event Forensics" : currentNav.label}</span>
             <span className="d">{currentNav.description}</span>
           </div>
           <div className="topbar-right">
@@ -387,8 +418,8 @@ export default function App() {
         <div className="page-wrapper">
           {page}
           <footer className="page-footer">
-            <span><Fingerprint size={13} /> Evidence preserved. Decisions traceable. Merkle-anchored.</span>
-            <span>LOGFORGE AI · UNIVERSAL LOG INTELLIGENCE</span>
+            <span><Fingerprint size={13} /> LogForge Platform</span>
+            <span>Production v0.2.0</span>
           </footer>
         </div>
       </main>

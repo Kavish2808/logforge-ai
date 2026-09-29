@@ -12,10 +12,11 @@ from sqlalchemy.orm import Session
 from app.db.models.event import Event
 
 
-def create_event(db: Session, event: Event) -> Event:
+def create_event(db: Session, event: Event, commit: bool = True) -> Event:
     db.add(event)
-    db.commit()
-    db.refresh(event)
+    if commit:
+        db.commit()
+        db.refresh(event)
     return event
 
 

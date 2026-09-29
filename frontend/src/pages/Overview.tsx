@@ -152,9 +152,9 @@ export function Overview() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">LogForge AI · Operational intelligence</div>
+          <div className="eyebrow">Operational Metrics</div>
           <h1>Overview</h1>
-          <p>Universal visibility into ingestion, normalization, integrity and adaptive parser health — every number is read from the database.</p>
+          <p>Real-time log volume, normalization rates, adapter status, and pipeline health.</p>
         </div>
         <div className="row">
           {recent.data?.items[0] && <span className="pill"><span className="dot ok" style={{ marginRight: 0 }} />Last event {fmtAgo(recent.data.items[0].received_at)}</span>}

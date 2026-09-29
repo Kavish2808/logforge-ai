@@ -16,6 +16,7 @@ from app.api.routes import (
     console_api,
     dashboard,
     demo,
+    devices,
     drift,
     events,
     export,
@@ -27,6 +28,7 @@ from app.api.routes import (
     learning,
     onboarding,
     phase8,
+    scale,
     views,
 )
 from app.config import get_settings
@@ -124,6 +126,8 @@ register_phase8()
 app.include_router(health.router)
 app.include_router(dashboard.router)
 app.include_router(integrations.router)
+app.include_router(devices.router)
+app.include_router(scale.router)
 app.include_router(ingest.router)
 app.include_router(events.router, prefix=settings.api_v1_prefix, dependencies=GOVERNED)
 app.include_router(drift.router, prefix=settings.api_v1_prefix, dependencies=GOVERNED)
