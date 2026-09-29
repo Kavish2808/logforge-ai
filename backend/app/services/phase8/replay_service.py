@@ -32,10 +32,11 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.ids import generate_event_id
+from app.db.advisory import try_advisory_lock
 from app.db.models.event import Event
 from app.db.models.learning import LearningSession
 from app.db.models.onboarding import ADAPTER_ACTIVE, ADAPTER_SUPERSEDED, OnboardedAdapter
@@ -242,15 +243,15 @@ def run_slice(db: Session, job_id: str, *, now: datetime | None = None) -> dict[
     """Process at most one rate-limited slice of a RUNNING job. Safe to call
     concurrently (per-job advisory lock) and after any interruption."""
     lock = _JOB_LOCK_BASE + (int(canonical_sha256(job_id)[:8], 16) % 0xFFFF)
-    if not db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": lock}).scalar():
-        db.rollback()
-        return {"job_id": job_id, "skipped": "locked by another worker"}
-    try:
-        return _slice(db, job_id, now or _now())
-    finally:
-        db.rollback()
-        db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": lock})
-        db.commit()
+    # The lock lives on its own pinned connection; the slice's per-event commits cannot move it (F-01).
+    with try_advisory_lock(db, lock) as got:
+        if not got:
+            db.rollback()
+            return {"job_id": job_id, "skipped": "locked by another worker"}
+        try:
+            return _slice(db, job_id, now or _now())
+        finally:
+            db.rollback()
 
 
 def _slice(db: Session, job_id: str, now: datetime) -> dict[str, Any]:

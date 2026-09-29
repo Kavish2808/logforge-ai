@@ -87,7 +87,7 @@ The companion is provided for native NGINX validation. It has not been deployed 
 - `/api/metrics`: public Prometheus-style operational values; no raw evidence or credentials.
 - `/api/admin/drain` and `/api/admin/undrain`: authenticated administrator controls for the replica receiving the request.
 
-To drain one replica, send the drain request directly to that replica's loopback port, wait for the router's healthy count to decrease and active work to finish, then stop that replica. Do not send a per-replica drain request through a load-balanced URL and assume it selected the intended worker. During saturation or temporary transport failure, retry with backoff and the same ingestion idempotency key.
+To drain one replica, send the drain request directly to that replica's loopback port, wait for the router's healthy count to decrease and active work to finish, then stop that replica. Do not send a per-replica drain request through a load-balanced URL and assume it selected the intended worker. During saturation or temporary transport failure, retry with backoff. Ingestion has no idempotency key: if the first attempt was committed but its response was lost, the retry creates a second event (same `raw_hash`).
 
 API metrics are per process where noted; scrapes through a round-robin address are not a fleet total. Scrape each replica when collecting process-level telemetry. Use PostgreSQL `pg_stat_database`, connection metrics, storage/WAL telemetry, and database host CPU/I/O to locate persistence bottlenecks. The shared write lock protects evidence order but constrains ingestion concurrency. More API replicas cannot remove that constraint.
 
@@ -113,6 +113,6 @@ Define source-specific retention, legal holds, archive access, and disposal appr
 
 ## Failure response
 
-Parser failures remain stored as failed evidence. An ingestion database failure fails the request; retry the identical batch key after recovery. Keep a durable copy of unacknowledged input at the sending system. A source-to-API transport is not itself a durable queue.
+Parser failures remain stored as failed evidence. An ingestion database failure fails the request; retry the identical batch after recovery (there is no idempotency key, so a retry after a lost response can duplicate events). Keep a durable copy of unacknowledged input at the sending system. A source-to-API transport is not itself a durable queue.
 
 If the worker stops, restart it against the same database and inspect persisted replay/delivery states. If an integrity check fails, preserve database snapshots and audit evidence, investigate the failed IDs, and do not repair by recalculating authoritative hashes. Alerts and the review ledger expose operational and approval issues; external paging integration requires site-specific setup.

@@ -28,6 +28,15 @@ def acting_as(claimed: str | None, actor: Actor) -> str:
     return actor.username
 
 
+def require_ingest(actor: Actor = Depends(current_actor)) -> Actor:
+    """Ingestion follows RBAC_MODE like the other operational endpoints (docs/API.md): any signed-in
+    role may ingest; anonymous callers only in RBAC_MODE=permissive; a presented token is always
+    validated (invalid -> 401 via current_actor)."""
+    if not actor.authenticated and get_settings().rbac_mode == "enforce":
+        raise HTTPException(status_code=401, detail="Authentication required for ingestion.")
+    return actor
+
+
 def require(capability: str, *, anonymous_in_permissive: bool = True) -> Callable[..., Actor]:
     """Capability check. Anonymous callers are accepted only in RBAC_MODE=
     permissive and only for operational capabilities; governance, role

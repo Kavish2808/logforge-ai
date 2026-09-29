@@ -9,11 +9,12 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.governance.deps import require_ingest
 from app.schema.ingest import MAX_BATCH_SIZE, BatchIngestRequest, BatchIngestResponse, IngestRequest
 from app.schema.ocsf import UniversalEvent
 from app.services import ingestion_service
 
-router = APIRouter(tags=["ingest"])
+router = APIRouter(tags=["ingest"], dependencies=[Depends(require_ingest)])
 
 
 class _ConsoleEvent(BaseModel):

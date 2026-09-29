@@ -15,10 +15,10 @@ import threading
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.db.advisory import try_advisory_lock
 
 logger = logging.getLogger(__name__)
 _TICK_LOCK = 0x4C46_5449_434B  # "LFTICK"
@@ -65,17 +65,15 @@ def _tick() -> None:
 
     db = SessionLocal()
     try:
-        got = db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": _TICK_LOCK}).scalar()
-        db.commit()
-        if not got:
-            return
-        try:
-            _state["last_result"] = run_once(db)
-            _state["last_run"] = datetime.now(tz=timezone.utc).isoformat()
-        finally:
-            db.rollback()
-            db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _TICK_LOCK})
-            db.commit()
+        # The lock lives on its own pinned connection; run_once's commits cannot move it (F-01).
+        with try_advisory_lock(db, _TICK_LOCK) as got:
+            if not got:
+                return
+            try:
+                _state["last_result"] = run_once(db)
+                _state["last_run"] = datetime.now(tz=timezone.utc).isoformat()
+            finally:
+                db.rollback()
     except Exception:  # noqa: BLE001
         logger.exception("Scheduler tick failed.")
     finally:

@@ -18,7 +18,7 @@ Roles: `ANALYST` (inspect, review, propose, export) < `SECURITY_ENGINEER` (+ app
 | `RBAC_MODE` | Behavior |
 |---|---|
 | `permissive` (default; development and Demo Mode only) | Anonymous calls to operational endpoints — ingest, review, propose, approve, export, replay — are accepted and audited as `anonymous`; maker-checker cannot be enforced between anonymous callers. Any presented token is fully enforced (invalid token → `401`, missing capability → `403`). |
-| `enforce` | Every governed action and every export requires a token with the needed capability. |
+| `enforce` | Every governed action and every export requires a token with the needed capability; every ingest call (`/ingest`, `/ingest/batch`, `/ingest/demo`) requires a valid token of any role. |
 
 In both modes: user management, governance configuration, critical approvals, golden baselines and webhook integrations always require an authenticated role, and read-only views (`/views/*`, `GET /events*`, the `/integrity` status/verify/batch/event reads, `/dashboard`) stay open. Raw recovery from the cold vault (`GET /integrity/raw/{id}/recover`) needs the `inspect` capability (anonymous only in permissive mode). `APP_ENV=production` refuses to start unless `RBAC_MODE=enforce`.
 
