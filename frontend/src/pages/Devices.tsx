@@ -282,6 +282,8 @@ export function DevicesPage() {
       const res = await dumpDeviceLogs(dumpingDevice.id, lines);
       setDumpResult(res);
       devices.reload();
+      scaleMetrics.reload();
+      lbTopology.reload();
       setMetricsTick((t) => t + 1);
     } catch (err) {
       setActionError(errorMessage(err));
@@ -297,6 +299,8 @@ export function DevicesPage() {
       const res = await dumpFleetLogs();
       setFleetResult(res);
       devices.reload();
+      scaleMetrics.reload();
+      lbTopology.reload();
       setMetricsTick((t) => t + 1);
     } catch (err) {
       setActionError(errorMessage(err));
@@ -314,8 +318,10 @@ export function DevicesPage() {
         vendor_mix: selectedVendors,
       });
       setBenchmarkResult(res);
-      setMetricsTick((t) => t + 1);
       devices.reload();
+      scaleMetrics.reload();
+      lbTopology.reload();
+      setMetricsTick((t) => t + 1);
     } catch (err) {
       setActionError(errorMessage(err));
     } finally {

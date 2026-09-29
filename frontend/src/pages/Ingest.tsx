@@ -4,6 +4,7 @@ import {
   Braces,
   FileJson2,
   Fingerprint,
+  Flame,
   LoaderCircle,
   Plus,
   ShieldCheck,
@@ -138,6 +139,11 @@ export function IngestPage() {
         <div className="eyebrow">Data Ingestion</div>
         <h1>Ingest Logs</h1>
         <p>Submit raw logs into the parsing, normalization, and cryptographic vault pipeline.</p>
+      </div>
+      <div className="row">
+        <a href="#/devices" className="button small" style={{ gap: 6, fontWeight: 600 }}>
+          <Flame size={14} style={{ color: "#f97316" }} /> 1M Scale Engine →
+        </a>
       </div>
     </div>
     <div className="ingest-layout">
