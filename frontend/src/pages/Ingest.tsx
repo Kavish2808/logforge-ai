@@ -27,23 +27,24 @@ const SAMPLES: Record<string, string> = {
 const SAMPLE_COLORS = ["#6cddbb", "#739ef5", "#bc9af1", "#e3b767", "#6cbed4", "#ec7995"];
 
 function parseInput(raw: string, mode: string) {
-  if (mode === "Single event") {
-    // If the input is clearly multi-line CSV or logs, automatically split to prevent single event byte overflow
-    if (raw.includes("\n") && (raw.includes(",") || raw.includes(" "))) {
-      const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      if (lines.length > 1) {
-        return lines.map((v) => ({ raw: v }));
-      }
-    }
-    return [{ raw }];
-  }
+  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!normalized) return [];
+
   if (mode === "JSON array") {
-    const a = JSON.parse(raw);
-    if (!Array.isArray(a)) throw new Error("Enter a JSON array of strings or event objects.");
-    return a.map((v) => ({ raw: typeof v === "string" ? v : JSON.stringify(v) }));
+    try {
+      const a = JSON.parse(normalized);
+      if (Array.isArray(a)) {
+        return a.map((v) => ({ raw: typeof v === "string" ? v : JSON.stringify(v) }));
+      }
+    } catch {
+      // fallback to line-by-line below if not a valid JSON array
+    }
   }
-  if (mode === "CSV / Tabular rows") {
-    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  // If input has multiple lines and contains commas, treat as CSV rows
+  if (mode === "CSV / Tabular rows" || (lines.length > 1 && lines[0].includes(","))) {
     if (lines.length > 1 && lines[0].includes(",")) {
       const headers = lines[0].split(",").map((h) => h.trim().replace(/^["']|["']$/g, ""));
       return lines.slice(1).map((line) => {
@@ -56,10 +57,13 @@ function parseInput(raw: string, mode: string) {
       });
     }
   }
-  return raw
-    .split(/\r?\n/)
-    .filter((v) => v.trim())
-    .map((v) => ({ raw: v }));
+
+  // If input has multiple lines, split into one event per line
+  if (mode === "One event per line" || lines.length > 1) {
+    return lines.map((v) => ({ raw: v }));
+  }
+
+  return [{ raw: normalized }];
 }
 
 export function IngestPage() {

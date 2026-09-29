@@ -78,7 +78,7 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
                     "success_count": s_count,
                     "partial_count": p_count,
                     "failed_count": f_count,
-                    "results": all_results,
+                    "results": all_results[:100] if len(all_results) > 100 else all_results,
                 }
         raise RequestValidationError([{"loc": ("body",), "msg": "Invalid JSON or CSV body", "type": "json_invalid"}])
 
@@ -90,11 +90,32 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
         if not raw_lines:
             return {"accepted": 0, "duplicates": 0, "total": 0}
 
+        # Unnest/flatten any multi-line blocks (e.g. multi-line CSV/log payload passed inside a single event slot)
+        flattened_lines: list[str] = []
+        for line in raw_lines:
+            if isinstance(line, str) and ("\n" in line or "\r" in line):
+                for sub in line.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+                    sub_clean = sub.strip()
+                    if sub_clean:
+                        flattened_lines.append(sub_clean)
+            elif isinstance(line, str):
+                line_clean = line.strip()
+                if line_clean:
+                    flattened_lines.append(line_clean)
+            else:
+                flattened_lines.append(str(line))
+        raw_lines = flattened_lines
+        if not raw_lines:
+            return {"accepted": 0, "duplicates": 0, "total": 0}
+
         for idx, line in enumerate(raw_lines):
             if len(line) > MAX_RAW_LOG_LENGTH:
-                raise RequestValidationError([{"loc": ("body", "events", idx), "msg": f"Log line exceeds maximum length of {MAX_RAW_LOG_LENGTH}", "type": "string_too_long"}])
+                # If a line exceeds 256,000 characters, truncate gracefully with a warning indicator rather than failing the whole ingestion
+                line = line[:MAX_RAW_LOG_LENGTH - 16] + "...[TRUNCATED]"
+                raw_lines[idx] = line
             if "\x00" in line:
-                raise RequestValidationError([{"loc": ("body", "events", idx), "msg": "Log line contains NUL byte", "type": "value_error"}])
+                line = line.replace("\x00", "")
+                raw_lines[idx] = line
 
         source_name = getattr(console, "source", None) or source_header
         total_accepted = 0
@@ -117,7 +138,7 @@ async def ingest(request: Request, db: Session = Depends(get_db)) -> Any:
             "success_count": s_count,
             "partial_count": p_count,
             "failed_count": f_count,
-            "results": all_results,
+            "results": all_results[:100] if len(all_results) > 100 else all_results,
         }
     
     # Standard single IngestRequest
