@@ -92,6 +92,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         status.HTTP_409_CONFLICT: "CONFLICT",
         status.HTTP_422_UNPROCESSABLE_ENTITY: "UNPROCESSABLE",
         status.HTTP_429_TOO_MANY_REQUESTS: "TOO_MANY_REQUESTS",
+        status.HTTP_501_NOT_IMPLEMENTED: "NOT_IMPLEMENTED",
         status.HTTP_502_BAD_GATEWAY: "UPSTREAM_ERROR",
     }.get(exc.status_code, "HTTP_ERROR")
     body = ErrorResponse(error=ErrorDetail(code=code, message=str(exc.detail)))

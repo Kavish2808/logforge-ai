@@ -1,5 +1,14 @@
 # Browser verification
 
+> **Accuracy notice (defect remediation, 2026-09-29).** Parts of this document describe capabilities the
+> application in this repository does not have. Verified against the code: the backend supports **PostgreSQL
+> only** (no SQLite); there is **no evidence-signing key or keyed batch signature** (Merkle anchors are unsigned
+> local append-only files); ingestion has **no idempotency key, deduplication or `raw_base64`**; there is **no
+> drain/readiness endpoint** (only `GET /health`); outbound webhook evidence delivery is **not implemented**; and
+> the integrity check is `GET /api/v1/integrity/verify` (all routes are under `/api/v1`). Statements below that
+> depend on those features are not valid for this codebase. Authoritative references: README.md,
+> [API.md](API.md), [ARCHITECTURE.md](ARCHITECTURE.md), [CAPABILITIES.md](CAPABILITIES.md).
+
 Verified on 28 September 2026 in the Codex Chromium browser against the real local FastAPI server and Vite frontend. The UI used an isolated SQLite database and a randomly generated test account; credentials and test databases are excluded from the source archive.
 
 | Check | Result |

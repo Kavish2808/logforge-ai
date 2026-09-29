@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-  Client[Authenticated client] --> API[FastAPI /api/ingest]
+  Client[Client] --> API[FastAPI /api/v1/ingest]
   API --> Detect[Deterministic detection]
   Detect --> Parse[Format or approved adapter parser]
   Parse --> Normalize[OCSF-aligned normalization]
@@ -12,24 +12,24 @@ flowchart LR
   Fields --> Store[(Shared database transaction)]
   Store --> Raw[Exact raw bytes + SHA-256]
   Store --> Event[Event + original revision]
-  Store --> Merkle[Batch Merkle tree + signature]
+  Store --> Merkle[Batch Merkle tree + local WORM-style anchor]
   Store --> Audit[Hash-chained audit]
   Store --> Drift[Drift findings + baseline history]
   UI[React console] --> API
-  Worker[Replay / delivery / SLA worker] --> Store
+  Worker[Scheduler: seal / SLA / alerts / replay] --> Store
 ```
 
-`raw` is encoded as UTF-8 exactly as submitted after JSON decoding. For original non-UTF8 bytes, submit `raw_base64`. Transport JSON bytes are not treated as the log payload: the decoded event byte array is the preserved evidence. One event may be 1 byte through 1 MiB, batches contain 1–10,000 events, and the HTTP request body has a bounded size. Oversized or invalid request envelopes are rejected explicitly; they are not reported as accepted events.
+`raw_log` is the UTF-8 text submitted in the JSON body (`POST /api/v1/ingest {"raw_log", "source_hint"?}`); its SHA-256 is computed over those UTF-8 bytes. Binary (non-UTF-8) payloads are not supported. One raw log may be 1 to 256,000 characters (NUL characters are rejected); `POST /api/v1/ingest/batch` accepts 1–1,000 logs, each ingested and committed independently. Invalid request envelopes are rejected with `422`; they are never reported as accepted events.
 
-Detection retains Syslog envelope priority, including Syslog-wrapped LEEF. The parser has no model dependency. Unknown or malformed payloads remain evidence, marked `PARTIAL` or `FAILED` where appropriate. Every flattened field is accounted for as a normalized field or a preserved extension, including normalization collisions.
+Detection retains Syslog envelope priority, including Syslog-wrapped LEEF: such an event is a syslog event, its LEEF attributes are not extracted into typed fields, and the complete LEEF payload is preserved in the normalized message (bare LEEF is parsed natively). The parser has no model dependency. Unknown or malformed payloads remain evidence, marked `PARTIAL` or `FAILED` where appropriate. Every flattened field is accounted for as a normalized field or a preserved extension, including normalization collisions.
 
 ## Consistency
 
-The database is authoritative for accounts, sessions, raw vault entries, events, batches, revisions, adapters, source baselines, replay jobs, deliveries, alerts, and audit history. PostgreSQL is required for production mode. SQLite is supported for local development and tests.
+PostgreSQL is the only supported database; it is authoritative for accounts, sessions, raw vault entries, events, batches, revisions, adapters, source baselines, replay jobs, alerts, and audit history. Webhook integration registrations are the exception: they are stored in a local JSON file on the API node (not replicated, not backed up).
 
-Writes serialize through a shared PostgreSQL state-row lock (or SQLite's write transaction). This keeps audit-head updates, event deduplication, revisions, and Merkle batch commits consistent across API processes. It is intentionally a capacity boundary: adding API workers does not remove this database write bottleneck.
+Audit-log appends, Merkle sealing and admin bootstrap serialize through PostgreSQL advisory transaction locks, which keeps the audit hash chain and batch sequence consistent across API processes. This is a capacity boundary: adding API workers does not remove these serialization points.
 
-The API persists an ingestion batch atomically. A connection failure can occur after a successful commit but before the client receives its response. Clients must retry the identical request with the same `idempotency_key`. Reusing a key for a different request is a conflict. Event uniqueness also uses source plus `external_id`, when supplied, or source plus raw SHA-256. Identical raw events from one source are deduplicated by default. Supply distinct stable external IDs when identical payloads represent separate real events.
+Ingestion does not deduplicate: every accepted raw log becomes its own event with its own id, even when two payloads are byte-identical (they share the same `raw_hash`). There is no idempotency key; a client that retries after a lost response creates a second event.
 
 ## Learning and governance
 
@@ -50,13 +50,22 @@ Candidate definitions are declarative. Supported parser options are validated, m
 
 Shipped mappings are frozen configuration. Evolution is allowed only for active learned adapters with accepted drift evidence. Validation retests stored samples and historical events. Shadow testing compares the old and candidate pipelines over six strata with a target of 25 events per stratum. It reports missing coverage rather than manufacturing it. Raw hash mismatch, field/evidence loss, degraded parse status, execution errors, and latency regressions block activation.
 
-Source baselines have history. Drift does not silently replace them. Golden pin/retire, baseline replacement, rollback, and large replay require recorded approval by a separate identity. Rollback selects an earlier approved adapter and preserves event history; reprocessing remains an explicit replay action.
+Source baselines have history. Drift does not silently replace them. Golden pin/re-pin/retire require an authenticated SOC_ADMIN with a written note (re-pin additionally refuses a SOC_ADMIN who approved the baseline changes being blessed); baseline replacement is a SOC_ADMIN critical approval; rollback requires a SECURITY_ENGINEER; a replay of more than 10,000 events must be started by a different authenticated engineer than its creator. Onboarding approval and learning approve/activate enforce maker-checker between authenticated users. Every decision record carries the acting identity: the signed-in user, or `anonymous` for unauthenticated calls in `RBAC_MODE=permissive` (the same identity the audit log records). Rollback selects an earlier approved adapter and preserves event history; reprocessing remains an explicit replay action.
 
 ## Replay and integrity
 
 Replay uses an event sequence cursor and a high-water mark, a database checkpoint, bounded work units, and rate control. Each processed event creates a numbered `REPLAY` revision, while revision 1 remains `ORIGINAL`. A unique event/job constraint prevents a resumed replay from creating duplicate revisions. Raw evidence and batch Merkle information remain unchanged.
 
-SHA-256 detects byte changes. Merkle roots and per-event proofs connect events to batches. A keyed batch signature adds tamper evidence for a party without the signing secret; the audit log is hash-chained. These mechanisms are not immutable storage. An operator with database and secret access can rewrite history. Stronger assurance requires independently controlled export anchors or an immutable storage service, which is not bundled here.
+SHA-256 detects byte changes. Merkle roots and per-event inclusion proofs connect events to sealed batches; each batch root is chained to the previous one and written to a local append-only anchor file (not a compliance-grade WORM device); the audit log is hash-chained. `GET /api/v1/integrity/verify` recomputes every batch root, checks the chain and anchors, and re-hashes every stored raw event inside PostgreSQL: a raw event whose SHA-256 no longer equals its `raw_hash` (`RAW_HASH_MISMATCH`), or whose `raw_hash` differs from the value its Merkle leaf sealed (`EVENT_HASH_NOT_SEALED_LEAF`), makes the verification fail with the affected event and batch ids. Verification only detects; it never repairs a hash. These mechanisms are not immutable storage: an operator with database and filesystem access can rewrite history. Stronger assurance requires independently controlled anchors or an immutable storage service, which is not bundled here.
+
+## Drift layers
+
+| Layer | What it compares | Outcome |
+|---|---|---|
+| Structural (Phase 5, per event) | field set, order, count and parser-level JSON type against the source baseline and accepted variants | `DRIFT` + `UNDER_REVIEW` below the similarity threshold, or when a critical field is removed or changes parser type |
+| Value shape (per event, `DRIFT_VALUE_SHAPE_ENABLED`) | the value of each critical field against the shape its typed target defines: `network.*_port` integer 0–65535, `network.*_ip` IPv4/IPv6 address, `timestamp` (only if declared critical) parseable by the adapter | `DRIFT` + `UNDER_REVIEW`, reason `CRITICAL_FIELD_VALUE_SHAPE_CHANGED`, change type `FIELD_VALUE_SHAPE_CHANGE`, expected/observed shape. Free-text fields (`event_action`, `severity`, …) have no shape, so ordinary value changes are never findings; empty values and vendor placeholders (`-`, `n/a`, …) count as "no value". The bootstrapping event's shapes are accepted with the auto-created baseline; accepting a drift (`add_variant`/`replace_baseline`) records its observed shape as accepted for that field |
+| Statistical (Phase 8, on demand) | distributions of monitored fields between two windows (PSI, new/vanished categories, null rate, cardinality, median shift); ≥ 200 events per window | findings with evidence; never changes events or baselines |
+| Semantic (Phase 8, advisory) | deterministic relabel heuristics on top of statistical findings | advisories only; never gates anything |
 
 ## Optional native routing
 
@@ -72,7 +81,7 @@ flowchart LR
   A2 --> PG
 ```
 
-NGINX OSS does not provide this project's required active health checks by itself. The included native companion probes readiness, writes only validated IP/port upstream entries, validates the NGINX configuration, and reloads it atomically. Empty healthy pools fail closed. NGINX passive failure checks cover the interval between probes. No probe removes the failure-after-check race, so clients retain idempotency keys on retries.
+NGINX OSS does not provide active health checks by itself. The optional standalone script `deploy/health_router.py` probes each API's `GET /health`, writes only validated IP/port upstream entries, validates the NGINX configuration, and reloads it; it is not part of the Docker Compose stack. NGINX passive failure checks cover the interval between probes. No probe removes the failure-after-check race, and ingestion has no idempotency key, so a retried request after a lost response can create a duplicate event.
 
-Routing stays separate from processing. Each replica runs the same application code and reads the same database. Active-request capacity is bounded per process, saturation returns an explicit error, and drain/readiness endpoints allow a replica to leave the routing pool before shutdown. Adaptive load scoring remains a future option; current routing is round-robin.
+Routing stays separate from processing. Each replica runs the same application code and reads the same database. The API has no per-process admission limit and no drain endpoint; routing is round-robin. Webhook integration registrations are node-local (see Consistency).
 
