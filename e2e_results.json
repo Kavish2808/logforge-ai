@@ -60,47 +60,55 @@
       },
       {
         "name": "Bad Credentials Handled Safely",
-        "status": "FAIL",
-        "detail": "Status code: 500"
+        "status": "PASS",
+        "detail": "Status code: 401"
       }
     ],
     "Dashboard": [
       {
         "name": "Dashboard Payload (/api/dashboard)",
-        "status": "FAIL",
-        "detail": "Counts: {}"
+        "status": "PASS",
+        "detail": "Counts: {'events': 105, 'parsed': 81, 'partial': 0, 'failed': 24, 'drifts': 0, 'pending_reviews': 0, 'integrity_failures': 0}"
       }
     ],
     "Ingest": [
       {
         "name": "Format: JSON Ingestion",
         "status": "PASS",
-        "detail": "ID: 01M3MWMD1Z524EF4Z2HPP2Z0A5, status: SUCCESS"
+        "detail": "ID: 01M3MX7JMSFBYEEK5RAD8ZA8WM, status: SUCCESS"
       },
       {
         "name": "Format: Syslog RFC3164 Ingestion",
         "status": "PASS",
-        "detail": "ID: 01M3MWMKJGRX3YJGMMHMQ72DAE, format: syslog"
+        "detail": "ID: 01M3MX7KHCC10GFTZMN7GN0PN7, format: syslog"
       },
       {
         "name": "Format: CEF Ingestion",
         "status": "PASS",
-        "detail": "ID: 01M3MWMNYE192TYTADXDFZPV4D, format: cef"
+        "detail": "ID: 01M3MX7KV3147XCH01PQ7B9NAN, format: cef"
       },
       {
         "name": "Format: LEEF Ingestion",
         "status": "PASS",
-        "detail": "ID: 01M3MWMSAS4D57D1JE4XJBPAE0, format: leef"
+        "detail": "ID: 01M3MX7KZR9RBP49VRHXH8ARSS, format: leef"
       },
       {
         "name": "Format: XML Ingestion",
         "status": "PASS",
-        "detail": "ID: 01M3MWMWC2T8HAB21T50MK8YKY, format: xml"
+        "detail": "ID: 01M3MX7M4XJTGS0PQ9Q9TCSFSG, format: xml"
       },
       {
         "name": "Demo Batch Ingest (/ingest/demo)",
-        "status": "FAIL",
-        "detail": "timed out"
+        "status": "PASS",
+        "detail": {
+          "accepted": 25,
+          "duplicates": 0,
+          "total": 25,
+          "success_count": 19,
+          "partial_count": 0,
+          "failed_count": 6,
+          "message": "Sample dataset loaded successfully (25 events)."
+        }
       },
       {
         "name": "Extension-Heavy Log Handling",
@@ -111,11 +119,11 @@
         "name": "Malformed JSON Ingestion Safe Fallback",
         "status": "PASS",
         "detail": {
-          "event_id": "01M3MWNAQDWF361X7CDZHGH6GR",
+          "event_id": "01M3MX7QWV933V75T4N0FXTE0V",
           "raw_event": "{not valid json: 'missing quote",
           "raw_hash": "563df2b197f79cd388218860f7da77754c488bb985550a00a5a7f6a9e9fe46d9",
-          "received_at": "2026-09-28T20:52:48.503051Z",
-          "processed_at": "2026-09-28T20:52:48.503215Z",
+          "received_at": "2026-09-28T21:02:51.809010Z",
+          "processed_at": "2026-09-28T21:02:51.809157Z",
           "event_timestamp": null,
           "format_detected": "unknown",
           "vendor": null,
@@ -164,10 +172,10 @@
           "structural_fingerprint": null,
           "warnings": [],
           "error_message": "Could not detect a known log format (syslog/json/cef).",
-          "id": "01M3MWNAQDWF361X7CDZHGH6GR",
+          "id": "01M3MX7QWV933V75T4N0FXTE0V",
           "source": "default",
           "format": "UNKNOWN",
-          "created_at": "2026-09-28T20:52:48.503051+00:00",
+          "created_at": "2026-09-28T21:02:51.809010+00:00",
           "raw_sha256": "563df2b197f79cd388218860f7da77754c488bb985550a00a5a7f6a9e9fe46d9",
           "raw_text": "{not valid json: 'missing quote",
           "normalized": {},
@@ -185,10 +193,10 @@
           "compact_lineage": "unknown:generic:v1",
           "revisions": [
             {
-              "id": "01M3MWNAQDWF361X7CDZHGH6GR-rev-1",
+              "id": "01M3MX7QWV933V75T4N0FXTE0V-rev-1",
               "revision": 1,
               "kind": "ORIGINAL",
-              "created_at": "2026-09-28T20:52:48.503051+00:00",
+              "created_at": "2026-09-28T21:02:51.809010+00:00",
               "adapter_id": null
             }
           ]
@@ -197,24 +205,24 @@
       {
         "name": "Unsafe XML XXE Probe Rejection / Sanitization",
         "status": "PASS",
-        "detail": "Status: 201, response: {'event_id': '01M3MWNDVZ6JFPAR760T24BC88', 'raw_event': '<!D"
+        "detail": "Status: 201, response: {'event_id': '01M3MX7R2JCAPZ897W1TY1GX80', 'raw_event': '<!D"
       },
       {
         "name": "Duplicate Event Ingestion Handling",
         "status": "PASS",
-        "detail": "First: 01M3MWNH0HF518JR0AM1H0PCVZ, Second: 01M3MWNHRMBCK10F7B0HA7DQK0"
+        "detail": "First: 01M3MX7R8901WWTWHPVTQJSVSD, Second: 01M3MX7RDKAYTMNNYE39G72X08"
       }
     ],
     "Events": [
       {
         "name": "Event Listing & Pagination (/api/events)",
         "status": "PASS",
-        "detail": "Total events: 105, Page items: 10"
+        "detail": "Total events: 140, Page items: 10"
       }
     ],
     "Forensics": [
       {
-        "name": "Forensics Verification (/api/events/01M3MWNHRMBCK10F7B0HA7DQK0)",
+        "name": "Forensics Verification (/api/events/01M3MX7RDKAYTMNNYE39G72X08)",
         "status": "PASS",
         "detail": {
           "raw_sha256": "186347520eaa0d4f4a524b6935b2e861adbefcbee3792da492159600df086df7",
@@ -228,8 +236,19 @@
     "Sources": [
       {
         "name": "Source Intelligence Discovery (/api/sources)",
-        "status": "FAIL",
-        "detail": "Sources discovered: 0"
+        "status": "PASS",
+        "detail": "Sources discovered: 6"
+      }
+    ],
+    "Baselines": [
+      {
+        "name": "Pin Golden Baseline (cef_generic)",
+        "status": "PASS",
+        "detail": {
+          "status": "REQUESTED",
+          "source": "cef_generic",
+          "note": "Console requested PIN golden baseline"
+        }
       }
     ],
     "Drift": [
@@ -259,13 +278,13 @@
         "name": "Propose Declarative Adapter (/api/adapters/propose)",
         "status": "PASS",
         "detail": {
-          "id": "learned-1790628783",
+          "id": "learned-1790629374",
           "vendor": "Acme Edge",
           "source": "acme-edge",
           "version": 1,
           "state": "PROPOSED",
           "origin": "learned",
-          "created_at": "2026-09-28T20:53:03.444819+00:00",
+          "created_at": "2026-09-28T21:02:54.651894+00:00",
           "samples_count": 2,
           "validation": {
             "match_rate": 1.0,
@@ -277,7 +296,7 @@
         "name": "Validate Adapter Sandbox (/validate)",
         "status": "PASS",
         "detail": {
-          "id": "learned-1790628783",
+          "id": "learned-1790629374",
           "state": "VALIDATED",
           "validation": {
             "match_rate": 1.0,
@@ -289,7 +308,7 @@
         "name": "Shadow Test Adapter (/shadow)",
         "status": "PASS",
         "detail": {
-          "id": "learned-1790628783",
+          "id": "learned-1790629374",
           "state": "VALIDATED",
           "shadow": {
             "outcome": "PASSED",
@@ -301,7 +320,7 @@
         "name": "Approve Adapter (/approve)",
         "status": "PASS",
         "detail": {
-          "id": "learned-1790628783",
+          "id": "learned-1790629374",
           "state": "APPROVED"
         }
       },
@@ -309,7 +328,7 @@
         "name": "Activate Adapter (/activate)",
         "status": "PASS",
         "detail": {
-          "id": "learned-1790628783",
+          "id": "learned-1790629374",
           "state": "ACTIVE"
         }
       }
@@ -324,19 +343,19 @@
         "name": "Create Revision-Aware Replay Job",
         "status": "PASS",
         "detail": {
-          "id": "replay-1790628784",
+          "id": "replay-1790629375",
           "source": "default",
           "status": "RUNNING",
           "processed": 0,
           "total": 100,
-          "created_at": "2026-09-28T20:53:04.256812+00:00"
+          "created_at": "2026-09-28T21:02:55.481930+00:00"
         }
       },
       {
         "name": "Pause Replay Control",
         "status": "PASS",
         "detail": {
-          "id": "replay-1790628784",
+          "id": "replay-1790629375",
           "status": "PAUSED"
         }
       },
@@ -344,7 +363,7 @@
         "name": "Resume Replay Control",
         "status": "PASS",
         "detail": {
-          "id": "replay-1790628784",
+          "id": "replay-1790629375",
           "status": "RUNNING"
         }
       }
@@ -356,7 +375,7 @@
         "detail": {
           "valid": true,
           "audit_valid": true,
-          "total": 105,
+          "total": 140,
           "failures": []
         }
       }
@@ -365,7 +384,7 @@
       {
         "name": "Hash-Chained Audit Trail (/api/audit)",
         "status": "PASS",
-        "detail": "Audit records: 9"
+        "detail": "Audit records: 11"
       }
     ],
     "Alerts": [
@@ -415,17 +434,17 @@
       {
         "name": "Database Events Count matches System Activity",
         "status": "PASS",
-        "detail": "Persisted events in DB: 105"
+        "detail": "Persisted events in DB: 140"
       },
       {
         "name": "Raw Vault Objects Verbatim Preservation",
         "status": "PASS",
-        "detail": "Vault objects: 105"
+        "detail": "Vault objects: 140"
       },
       {
         "name": "Audit Log Records Maintained",
         "status": "PASS",
-        "detail": "Audit entries: 9"
+        "detail": "Audit entries: 11"
       },
       {
         "name": "Source Baselines Persisted",
@@ -435,9 +454,9 @@
     ]
   },
   "counts": {
-    "total": 47,
-    "passed": 43,
-    "failed": 4,
+    "total": 48,
+    "passed": 48,
+    "failed": 0,
     "skipped": 0
   },
   "evidence": {}
