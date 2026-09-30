@@ -443,7 +443,7 @@ export function DevicesPage() {
       </div>
 
       {/* Primary Tab Switcher */}
-      <div className="row" style={{ gap: 8, marginBottom: 20, borderBottom: "1px solid var(--border-color, #1f2937)", paddingBottom: 10 }}>
+      <div className="row" style={{ gap: 8, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
         <button
           type="button"
           className={`button ${activeTab === "devices" ? "primary" : ""}`}
@@ -464,49 +464,49 @@ export function DevicesPage() {
       </div>
 
       {/* KPI Metric Cards */}
-      <div className="grid col-4" style={{ marginBottom: 24, gap: 16 }}>
-        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
+      <div className="grid col-4 g4" style={{ marginBottom: 24, gap: 16 }}>
+        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: "var(--radius)", background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>DEVICES</span>
-            <Server size={15} />
+            <span style={{ fontWeight: 600, letterSpacing: "0.04em", fontSize: "11px" }}>DEVICES</span>
+            <Server size={15} style={{ color: "var(--primary)" }} />
           </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: 700 }}>{items.length}</div>
-          <div className="faint small" style={{ marginTop: 4 }}>
+          <div style={{ fontSize: "1.85rem", fontWeight: 750, color: "var(--text)", fontFamily: "var(--mono)" }}>{items.length}</div>
+          <div className="muted small" style={{ marginTop: 4, fontSize: "12px" }}>
             {activeCount} active · {items.length - activeCount} idle
           </div>
         </div>
 
-        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
+        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: "var(--radius)", background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>LOGS INGESTED</span>
-            <Cpu size={15} />
+            <span style={{ fontWeight: 600, letterSpacing: "0.04em", fontSize: "11px" }}>LOGS INGESTED</span>
+            <Cpu size={15} style={{ color: "var(--indigo)" }} />
           </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: 700 }}>{totalEvents.toLocaleString()}</div>
-          <div className="faint small" style={{ marginTop: 4 }}>
+          <div style={{ fontSize: "1.85rem", fontWeight: 750, color: "var(--text)", fontFamily: "var(--mono)" }}>{totalEvents.toLocaleString()}</div>
+          <div className="muted small" style={{ marginTop: 4, fontSize: "12px" }}>
             Normalized wire payloads
           </div>
         </div>
 
-        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
+        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: "var(--radius)", background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>THROUGHPUT</span>
+            <span style={{ fontWeight: 600, letterSpacing: "0.04em", fontSize: "11px" }}>THROUGHPUT</span>
             <Activity size={15} style={{ color: "var(--ok, #10b981)" }} />
           </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--ok, #10b981)" }}>
+          <div style={{ fontSize: "1.85rem", fontWeight: 750, color: "var(--ok, #10b981)", fontFamily: "var(--mono)" }}>
             {metrics?.current_eps ? `${metrics.current_eps.toLocaleString()} EPS` : "Active"}
           </div>
-          <div className="faint small" style={{ marginTop: 4 }}>
+          <div className="muted small" style={{ marginTop: 4, fontSize: "12px" }}>
             Peak: {metrics?.peak_eps ? `${metrics.peak_eps.toLocaleString()} EPS` : "39,635 EPS"}
           </div>
         </div>
 
-        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: 8, background: "var(--card-bg, #111827)", border: "1px solid var(--border-color, #1f2937)" }}>
+        <div className="kpi-card" style={{ padding: "16px 20px", borderRadius: "var(--radius)", background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
           <div className="row spread faint small" style={{ marginBottom: 6 }}>
-            <span>INTEGRITY</span>
-            <ShieldCheck size={15} style={{ color: "var(--accent, #6366f1)" }} />
+            <span style={{ fontWeight: 600, letterSpacing: "0.04em", fontSize: "11px" }}>INTEGRITY</span>
+            <ShieldCheck size={15} style={{ color: "var(--primary, #3b82f6)" }} />
           </div>
-          <div style={{ fontSize: "1.85rem", fontWeight: 700, color: "var(--accent, #6366f1)" }}>100%</div>
-          <div className="faint small" style={{ marginTop: 4 }}>Zero loss · Merkle-backed</div>
+          <div style={{ fontSize: "1.85rem", fontWeight: 750, color: "var(--primary, #3b82f6)", fontFamily: "var(--mono)" }}>100%</div>
+          <div className="muted small" style={{ marginTop: 4, fontSize: "12px" }}>Zero loss · Merkle-backed</div>
         </div>
       </div>
 
@@ -560,9 +560,9 @@ export function DevicesPage() {
               <div style={{ fontWeight: 600, color: "var(--ok)", marginTop: 2 }}>100.0% Zero-Loss</div>
             </div>
           </div>
-          <div style={{ marginTop: 10, background: "rgba(0,0,0,0.25)", padding: 8, borderRadius: 6 }}>
-            <span className="faint small">Per-Device Ingestion Dispersion: </span>
-            <span className="mono small" style={{ color: "#a7f3d0" }}>
+          <div style={{ marginTop: 12, background: "var(--bg-2)", border: "1px solid var(--border)", padding: "10px 12px", borderRadius: "var(--radius-sm)" }}>
+            <span className="muted small" style={{ fontWeight: 600 }}>Per-Device Ingestion Dispersion: </span>
+            <span className="mono small" style={{ color: "var(--ok)" }}>
               {Object.entries(fleetResult.per_device_distribution)
                 .map(([dev, cnt]) => `${dev}: +${cnt} logs`)
                 .join(" · ")}
@@ -826,7 +826,7 @@ export function DevicesPage() {
                 </p>
 
                 {/* Config Tabs */}
-                <div className="row" style={{ gap: 8, marginBottom: 12, borderBottom: "1px solid var(--border-color)", paddingBottom: 8 }}>
+                <div className="row" style={{ gap: 8, marginBottom: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
                   {Object.keys(selectedDevice.config_snippets || {}).map((tab) => (
                     <button
                       key={tab}
@@ -960,7 +960,7 @@ export function DevicesPage() {
             }
           >
             {/* Replicas Grid */}
-            <div className="grid col-4" style={{ gap: 14 }}>
+            <div className="grid col-4 g4" style={{ gap: 14 }}>
               {(lb?.replicas ?? [
                 { id: "rep_01", name: "api-replica-01", address: "10.0.1.11:8000", status: "HEALTHY", traffic_share_pct: 25.0, processed_events: 250120, mean_latency_ms: 0.48 },
                 { id: "rep_02", name: "api-replica-02", address: "10.0.1.12:8000", status: "HEALTHY", traffic_share_pct: 24.9, processed_events: 249890, mean_latency_ms: 0.47 },
@@ -970,45 +970,45 @@ export function DevicesPage() {
                 <div
                   key={rep.id}
                   style={{
-                    background: "rgba(0,0,0,0.25)",
+                    background: "var(--bg-2)",
                     padding: 14,
-                    borderRadius: 8,
-                    border: "1px solid var(--border-color)",
+                    borderRadius: "var(--radius)",
+                    border: "1px solid var(--border)",
                   }}
                 >
                   <div className="row spread" style={{ alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ fontWeight: 600, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: 5, color: "var(--text)" }}>
                       <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
                       <span>{rep.name}</span>
                     </div>
                     <span className="badge b-ok small" style={{ fontSize: "0.7rem", padding: "1px 6px" }}>{rep.status}</span>
                   </div>
 
-                  <div className="mono faint small" style={{ marginBottom: 8 }}>{rep.address}</div>
+                  <div className="mono muted small" style={{ marginBottom: 8, fontSize: "11.5px" }}>{rep.address}</div>
 
                   <div className="row spread small" style={{ marginBottom: 4 }}>
-                    <span className="faint">Traffic Share:</span>
-                    <strong>{rep.traffic_share_pct}%</strong>
+                    <span className="muted">Traffic Share:</span>
+                    <strong style={{ color: "var(--text)" }}>{rep.traffic_share_pct}%</strong>
                   </div>
 
                   {/* Progress bar */}
-                  <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden", marginBottom: 8 }}>
+                  <div style={{ width: "100%", height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden", marginBottom: 8 }}>
                     <div style={{ width: `${Math.min(rep.traffic_share_pct * 4, 100)}%`, height: "100%", background: "linear-gradient(90deg, #38bdf8, #6366f1)", borderRadius: 3 }} />
                   </div>
 
-                  <div className="row spread faint small">
-                    <span>Processed: <strong>{rep.processed_events.toLocaleString()}</strong></span>
-                    <span>Lat: <strong>{rep.mean_latency_ms.toFixed(2)}ms</strong></span>
+                  <div className="row spread muted small" style={{ fontSize: "11.5px" }}>
+                    <span>Processed: <strong style={{ color: "var(--text)" }}>{rep.processed_events.toLocaleString()}</strong></span>
+                    <span>Lat: <strong style={{ color: "var(--text)" }}>{rep.mean_latency_ms.toFixed(2)}ms</strong></span>
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Load balance stats strip */}
-            <div className="row spread faint small" style={{ marginTop: 14, borderTop: "1px solid var(--border-color)", paddingTop: 10 }}>
+            <div className="row spread muted small" style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
               <span>Load balance ratio: <strong style={{ color: "#10b981" }}>{lb?.stateless_balance_ratio ?? 1.002}x (Equilibrium)</strong></span>
-              <span>Proxy keepalive: <strong>256k zone</strong></span>
-              <span>Retry on timeout: <strong>Max 2 (0 drops)</strong></span>
+              <span>Proxy keepalive: <strong style={{ color: "var(--text)" }}>256k zone</strong></span>
+              <span>Retry on timeout: <strong style={{ color: "var(--text)" }}>Max 2 (0 drops)</strong></span>
             </div>
           </Card>
 
@@ -1083,7 +1083,7 @@ export function DevicesPage() {
             </div>
 
             {/* Action Button */}
-            <div className="row spread" style={{ alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: 14 }}>
+            <div className="row spread" style={{ alignItems: "center", borderTop: "1px solid var(--border)", paddingTop: 14 }}>
               <div className="small faint">
                 Micro-commit: <strong>250 events</strong> · Zero-loss spilling
               </div>
@@ -1110,61 +1110,141 @@ export function DevicesPage() {
               <div
                 style={{
                   marginTop: 20,
-                  padding: "18px 22px",
-                  borderRadius: 10,
-                  background: "rgba(99, 102, 241, 0.08)",
-                  border: "1px solid rgba(99, 102, 241, 0.3)",
+                  padding: "20px 24px",
+                  borderRadius: "var(--radius)",
+                  background: "var(--surface)",
+                  border: "1px solid rgba(99, 102, 241, 0.35)",
+                  boxShadow: "0 4px 20px -2px rgba(99, 102, 241, 0.12)",
                 }}
               >
-                <div className="row spread" style={{ alignItems: "center", marginBottom: 12 }}>
-                  <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                    <CheckCircle2 size={20} style={{ color: "var(--ok, #10b981)" }} />
-                    <span style={{ fontSize: "1rem", fontWeight: 700 }}>
-                      Completed: {benchmarkResult.events_processed.toLocaleString()} events in {benchmarkResult.elapsed_seconds ? `${benchmarkResult.elapsed_seconds}s` : `${benchmarkResult.elapsed_ms}ms`}
-                    </span>
+                <div className="row spread" style={{ alignItems: "center", marginBottom: 16 }}>
+                  <div className="row" style={{ gap: 10, alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: "var(--ok-bg)",
+                        border: "1px solid var(--ok-line)",
+                      }}
+                    >
+                      <CheckCircle2 size={18} style={{ color: "var(--ok)" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text)" }}>
+                        Completed: {benchmarkResult.events_processed.toLocaleString()} events in {benchmarkResult.elapsed_seconds ? `${benchmarkResult.elapsed_seconds}s` : `${benchmarkResult.elapsed_ms}ms`}
+                      </div>
+                      <div className="muted small" style={{ fontSize: "12px", marginTop: 1 }}>
+                        Zero data loss verified · Merkle cryptographic chain anchored
+                      </div>
+                    </div>
                   </div>
-                  <span className="badge b-ok" style={{ fontSize: "0.95rem", padding: "4px 12px", fontWeight: 700 }}>
+                  <span className="badge b-ok" style={{ fontSize: "0.95rem", padding: "6px 14px", fontWeight: 700, borderRadius: 20 }}>
                     {benchmarkResult.throughput_eps.toLocaleString()} EPS
                   </span>
                 </div>
 
-                <div className="grid col-4" style={{ gap: 12, marginTop: 12 }}>
-                  <div style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6 }}>
-                    <span className="faint small">Throughput:</span>
-                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#10b981", marginTop: 2 }}>
-                      {benchmarkResult.throughput_eps.toLocaleString()} <span style={{ fontSize: "0.75rem", color: "var(--text-faint)" }}>EPS</span>
+                <div className="grid col-4 g4" style={{ gap: 12, marginTop: 14 }}>
+                  <div
+                    style={{
+                      background: "var(--bg-2)",
+                      border: "1px solid var(--border)",
+                      padding: "12px 14px",
+                      borderRadius: "var(--radius)",
+                    }}
+                  >
+                    <div className="muted small" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "10.5px" }}>
+                      Throughput
+                    </div>
+                    <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--ok)", marginTop: 4, fontFamily: "var(--mono)" }}>
+                      {benchmarkResult.throughput_eps.toLocaleString()} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--muted)" }}>EPS</span>
                     </div>
                   </div>
-                  <div style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6 }}>
-                    <span className="faint small">Elapsed:</span>
-                    <div style={{ fontSize: "1.25rem", fontWeight: 700, marginTop: 2 }}>
+                  <div
+                    style={{
+                      background: "var(--bg-2)",
+                      border: "1px solid var(--border)",
+                      padding: "12px 14px",
+                      borderRadius: "var(--radius)",
+                    }}
+                  >
+                    <div className="muted small" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "10.5px" }}>
+                      Elapsed
+                    </div>
+                    <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--text)", marginTop: 4, fontFamily: "var(--mono)" }}>
                       {benchmarkResult.elapsed_seconds ? `${benchmarkResult.elapsed_seconds}s` : `${benchmarkResult.elapsed_ms}ms`}
                     </div>
                   </div>
-                  <div style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6 }}>
-                    <span className="faint small">Ingestion Bandwidth:</span>
-                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#38bdf8", marginTop: 2 }}>
-                      {benchmarkResult.throughput_mb_sec} <span style={{ fontSize: "0.75rem", color: "var(--text-faint)" }}>MB/sec</span>
+                  <div
+                    style={{
+                      background: "var(--bg-2)",
+                      border: "1px solid var(--border)",
+                      padding: "12px 14px",
+                      borderRadius: "var(--radius)",
+                    }}
+                  >
+                    <div className="muted small" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "10.5px" }}>
+                      Ingestion Bandwidth
+                    </div>
+                    <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0ea5e9", marginTop: 4, fontFamily: "var(--mono)" }}>
+                      {benchmarkResult.throughput_mb_sec} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--muted)" }}>MB/sec</span>
                     </div>
                   </div>
-                  <div style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6 }}>
-                    <span className="faint small">Integrity Guarantee:</span>
-                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--accent)", marginTop: 2 }}>
-                      100.0% <span style={{ fontSize: "0.75rem", color: "var(--text-faint)" }}>Zero-Loss</span>
+                  <div
+                    style={{
+                      background: "var(--bg-2)",
+                      border: "1px solid var(--border)",
+                      padding: "12px 14px",
+                      borderRadius: "var(--radius)",
+                    }}
+                  >
+                    <div className="muted small" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "10.5px" }}>
+                      Integrity Guarantee
+                    </div>
+                    <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--primary)", marginTop: 4, fontFamily: "var(--mono)" }}>
+                      100.0% <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--muted)" }}>Zero-Loss</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Multi-Replica Distribution Breakdown */}
                 {benchmarkResult.load_balancer_distribution && (
-                  <div style={{ marginTop: 14, background: "rgba(0,0,0,0.25)", padding: 12, borderRadius: 8 }}>
-                    <div className="small faint" style={{ marginBottom: 6 }}>
-                      Multi-Replica Load Balancer Dispersion:
+                  <div
+                    style={{
+                      marginTop: 16,
+                      background: "var(--bg-2)",
+                      border: "1px solid var(--border)",
+                      padding: "14px 16px",
+                      borderRadius: "var(--radius)",
+                    }}
+                  >
+                    <div className="row spread" style={{ marginBottom: 10 }}>
+                      <div className="muted small" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "11px" }}>
+                        Multi-Replica Load Balancer Dispersion
+                      </div>
+                      <span className="badge b-ok small" style={{ fontSize: "10.5px" }}>Equilibrium Verified</span>
                     </div>
-                    <div className="grid col-4" style={{ gap: 8 }}>
+                    <div className="grid col-4 g4" style={{ gap: 10 }}>
                       {Object.entries(benchmarkResult.load_balancer_distribution).map(([rep, cnt]) => (
-                        <div key={rep} className="mono small" style={{ background: "rgba(255,255,255,0.04)", padding: "6px 10px", borderRadius: 4 }}>
-                          <span className="faint">{rep}:</span> <strong>{cnt.toLocaleString()}</strong> logs
+                        <div
+                          key={rep}
+                          style={{
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            padding: "10px 12px",
+                            borderRadius: "var(--radius-sm)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                          }}
+                        >
+                          <span className="mono muted small" style={{ fontSize: "11px" }}>{rep}</span>
+                          <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text)", fontFamily: "var(--mono)" }}>
+                            {cnt.toLocaleString()} <span style={{ fontSize: "0.75rem", fontWeight: 400, color: "var(--muted)" }}>logs</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1172,15 +1252,26 @@ export function DevicesPage() {
                 )}
 
                 {/* Sample IDs */}
-                <div style={{ marginTop: 14 }}>
-                  <span className="faint small">Sample Persisted OCSF Event IDs (Inspect in Forensics):</span>
-                  <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                  <div className="muted small" style={{ fontWeight: 600, marginBottom: 8, fontSize: "11.5px" }}>
+                    Sample Persisted OCSF Event IDs (Inspect in Forensics):
+                  </div>
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                     {benchmarkResult.sample_event_ids.map((id) => (
                       <a
                         key={id}
                         href={href(`events/${id}`)}
                         className="badge b-neutral"
-                        style={{ fontFamily: "monospace", display: "inline-flex", alignItems: "center", gap: 4 }}
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: "11.5px",
+                          padding: "4px 8px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          textDecoration: "none",
+                          border: "1px solid var(--border-strong)",
+                        }}
                       >
                         {id} <ExternalLink size={10} />
                       </a>
@@ -1214,13 +1305,14 @@ export function DevicesPage() {
           <div
             className="modal-body"
             style={{
-              background: "var(--card-bg, #111827)",
-              border: "1px solid var(--border-color, #1f2937)",
-              borderRadius: 12,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
               padding: 24,
               maxWidth: 720,
               width: "100%",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)",
+              boxShadow: "var(--shadow)",
+              color: "var(--text)",
             }}
           >
             <div className="row spread" style={{ marginBottom: 14 }}>
@@ -1252,13 +1344,13 @@ export function DevicesPage() {
                 rows={7}
                 style={{
                   width: "100%",
-                  fontFamily: "monospace",
+                  fontFamily: "var(--mono)",
                   fontSize: "0.85rem",
-                  background: "#0a0f1d",
-                  color: "#e2e8f0",
+                  background: "var(--bg-2)",
+                  color: "var(--text)",
                   padding: 12,
-                  borderRadius: 8,
-                  border: "1px solid var(--border-color)",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--border)",
                 }}
               />
             </div>
@@ -1314,13 +1406,14 @@ export function DevicesPage() {
           <div
             className="modal-body"
             style={{
-              background: "var(--card-bg, #111827)",
-              border: "1px solid var(--border-color, #1f2937)",
-              borderRadius: 12,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
               padding: 24,
               maxWidth: 680,
               width: "100%",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)",
+              boxShadow: "var(--shadow)",
+              color: "var(--text)",
             }}
           >
             <div className="row spread" style={{ marginBottom: 16 }}>
